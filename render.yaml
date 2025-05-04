@@ -1,0 +1,16 @@
+# ไฟล์ configuration สำหรับ deploy บน render.com
+services:
+  # บริการหลักสำหรับแอปพลิเคชัน
+  - type: web
+    name: budget-control
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: GOOGLE_CLIENT_ID
+        sync: false # ต้องตั้งค่าด้วยตนเองในแดชบอร์ดของ render.com
+    autoDeploy: true
