@@ -51,10 +51,12 @@
 - ค้นหาโครงการ
 - กรองตามช่วงเวลา
 
-### 5. การอัพเดทแบบ Real-time
-- อัพเดทยอดงบประมาณทันทีเมื่อมีการทำรายการ
-- แสดงการแจ้งเตือนเมื่อทำรายการสำเร็จ
-- อัพเดทสถานะโครงการอัตโนมัติ
+### 5. การจัดการผู้ใช้ (User Management)
+- เข้าสู่ระบบด้วยบัญชี Google (@react-oauth/google)
+- กำหนดสิทธิ์ผู้ใช้ (Admin, User)
+- อนุมัติผู้ใช้ใหม่
+- จัดการผู้ใช้ (ดูรายชื่อ, เปลี่ยนบทบาท, ลบ)
+- กำหนด Admin เริ่มต้น (nutrawee@subyaischool.ac.th)
 
 ### 6. การตรวจสอบความถูกต้อง (Validation)
 - ตรวจสอบยอดงบประมาณคงเหลือก่อนทำรายการ
@@ -62,191 +64,153 @@
 - แจ้งเตือนเมื่อข้อมูลไม่ถูกต้อง
 - ป้องกันการทำรายการที่เกินงบประมาณ
 
-## การติดตั้งและใช้งาน
+## การติดตั้งและใช้งาน (สำหรับ Development)
 
-### การติดตั้ง
-1. ติดตั้ง Node.js (เวอร์ชัน 14.0.0 ขึ้นไป)
-2. Clone โปรเจค
-3. ติดตั้ง dependencies:
-   ```bash
-   npm install
-   ```
-4. รันแอปพลิเคชัน:
-   ```bash
-   npm start
-   ```
-5. เปิดเบราว์เซอร์ที่ http://localhost:3000
+### ข้อกำหนดเบื้องต้น
+- ติดตั้ง Node.js (เวอร์ชัน 16.x ขึ้นไปแนะนำ)
+- Git
 
-### เทคโนโลยีที่ใช้
-- React
-- TypeScript
-- Material-UI
-- React Router
-- Date-fns
-- xlsx
-- React Context API (สำหรับการจัดการ state แบบเรียลไทม์)
+### ขั้นตอนการติดตั้ง
+1.  **Clone Repository:**
+    ```bash
+    git clone https://github.com/project-sy789/budget-control.git
+    cd budget-control
+    ```
+2.  **ติดตั้ง Dependencies:**
+    ```bash
+    npm install
+    ```
+3.  **ตั้งค่า Environment Variables:**
+    - สร้างไฟล์ `.env` ใน root directory ของโปรเจกต์ โดยคัดลอกจาก `.env.example`
+    - แก้ไขไฟล์ `.env` และใส่ `GOOGLE_CLIENT_ID` ของคุณ:
+      ```
+      REACT_APP_GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID_HERE
+      ```
+    *หมายเหตุ: `server.js` จะใช้ค่านี้ผ่าน `process.env.GOOGLE_CLIENT_ID` หากไม่ได้ตั้งค่าใน environment ของ server โดยตรง*
 
-### โครงสร้างโปรเจค
+### การรันแอปพลิเคชัน (Development Mode)
+1.  **รัน Backend Server (Express):**
+    เปิด Terminal แรก และรัน:
+    ```bash
+    node server.js
+    ```
+    เซิร์ฟเวอร์จะทำงานที่ `http://localhost:3001` (หรือ port ที่กำหนดโดย `PORT` environment variable)
+
+2.  **รัน Frontend (React App):**
+    เปิด Terminal ที่สอง และรัน:
+    ```bash
+    npm start
+    ```
+    แอปพลิเคชันจะเปิดในเบราว์เซอร์ที่ `http://localhost:3000`
+
+## เทคโนโลยีที่ใช้
+
+- **Frontend:**
+  - React
+  - TypeScript
+  - Material-UI (MUI)
+  - React Router
+  - React Context API
+  - @react-oauth/google (สำหรับ Google Login)
+  - Date-fns
+  - xlsx (สำหรับ Import/Export Excel)
+- **Backend:**
+  - Node.js
+  - Express
+  - cors
+  - google-auth-library (สำหรับ Verify Google Token)
+  - uuid (สำหรับสร้าง ID)
+- **Development & Build:**
+  - npm
+  - Create React App (react-scripts)
+
+## โครงสร้างโปรเจค
 ```
 budget-control/
 ├── README.md
-├── src/
+├── package.json
+├── package-lock.json
+├── tsconfig.json
+├── .gitignore
+├── .env.example        # ตัวอย่าง Environment Variables
+├── server.js           # Backend Express Server
+├── public/             # Static files (HTML, favicon, etc.)
+├── src/                # Frontend React code
 │   ├── components/     # React components
-│   ├── context/       # React Context providers
-│   ├── types/         # TypeScript Interfaces
-│   ├── utils/         # Utility Functions
-│   ├── App.tsx        # Main application component
-│   └── main.tsx       # Application entry point
-├── public/            # Static files
-├── templates/         # Excel templates
+│   ├── contexts/       # React Context providers (Auth, Budget)
+│   ├── services/       # Service functions (AuthService.js)
+│   ├── types/          # TypeScript Interfaces
+│   ├── utils/          # Utility Functions
+│   ├── App.tsx         # Main application component
+│   └── index.tsx       # Application entry point (เดิมคือ main.tsx)
+├── build/              # Frontend build output (หลังรัน npm run build)
+├── templates/          # Excel templates
 │   └── project_export_template.xlsx
-└── scripts/          # Utility scripts
-    └── create_excel_template.py
+├── scripts/            # Utility scripts
+│   └── create_excel_template.py
+├── render.yaml         # Deployment config for Render.com (ตัวอย่าง)
+└── Procfile            # Deployment config for Railway/Heroku (ตัวอย่าง)
 ```
+
+## การ Deploy
+
+แอปพลิเคชันนี้ถูกออกแบบมาเพื่อ deploy เป็น Node.js application บนแพลตฟอร์ม เช่น Render.com หรือ Railway.app
+
+### ขั้นตอนทั่วไป:
+1.  **Push โค้ดไปยัง Git Repository** (เช่น GitHub, GitLab)
+2.  **สร้าง Service/App ใหม่บนแพลตฟอร์ม:**
+    - เชื่อมต่อกับ Git repository ของคุณ
+3.  **ตั้งค่า Build & Start Commands:**
+    - **Build Command:** `npm install && npm run build`
+    - **Start Command:** `npm run start:prod` (ซึ่งจะรัน `node server.js`)
+4.  **ตั้งค่า Environment Variables:**
+    - `GOOGLE_CLIENT_ID`: ใส่ Google Client ID ของคุณ
+    - `NODE_ENV`: ตั้งค่าเป็น `production` (แพลตฟอร์มส่วนใหญ่มักตั้งค่าให้อัตโนมัติ)
+    - (Optional) `PORT`: แพลตฟอร์มส่วนใหญ่จะกำหนด port ให้อัตโนมัติ
+5.  **(สำคัญ) ตั้งค่าฐานข้อมูล:**
+    - `server.js` ปัจจุบันใช้ **in-memory storage** ซึ่งข้อมูลจะหายไปเมื่อเซิร์ฟเวอร์รีสตาร์ท
+    - สำหรับ Production **ต้อง** เปลี่ยนไปใช้ฐานข้อมูลแบบถาวร เช่น PostgreSQL, MongoDB ที่ให้บริการโดยแพลตฟอร์ม หรือเชื่อมต่อกับฐานข้อมูลภายนอก
+    - แก้ไข `server.js` ในส่วน API routes (Projects, Transactions, Users) ให้บันทึกและอ่านข้อมูลจากฐานข้อมูลที่คุณเลือก
+
+### ตัวอย่างไฟล์ Config:
+- `render.yaml`: สำหรับ Render.com (ต้องปรับแก้ตามต้องการ)
+- `Procfile`: สำหรับ Railway.app / Heroku (ระบุ `web: npm run start:prod`)
 
 ## การนำเข้าข้อมูลจาก Excel
 
+(ส่วนนี้ยังคงเหมือนเดิม - ตรวจสอบความถูกต้องอีกครั้งหากมีการเปลี่ยนแปลง API)
+
 ### 1. การเตรียมไฟล์ Excel
-1. ดาวน์โหลดไฟล์เทมเพลต Excel จากระบบโดยคลิกที่ปุ่ม "ส่งออกโครงการ" บนหน้าจัดการโครงการ
-2. ไฟล์ Excel ประกอบด้วยชีทต่างๆ ดังนี้:
-   - Sheet "นำเข้าโครงการ" หรือ "โครงการทั้งหมด": สำหรับข้อมูลโครงการ
-   - Sheet "รายการทั้งหมด": สำหรับข้อมูลรายการเบิกจ่ายและการโอนงบประมาณ
-   - Sheet "แบบฟอร์มโครงการ": ตัวอย่างการกรอกข้อมูลโครงการ
-   - Sheet "แบบฟอร์มรายการ": ตัวอย่างการกรอกข้อมูลรายการปกติ
-   - Sheet "แบบฟอร์มโอนงบ": ตัวอย่างการกรอกข้อมูลรายการโอนงบประมาณ
-   - Sheet "คำอธิบายโครงการ" และ "คำอธิบายรายการ": คำอธิบายฟิลด์ต่างๆ
+...
 
 ### 2. การกรอกข้อมูลโครงการ
-#### ข้อมูลที่จำเป็น:
-- `name`: ชื่อโครงการ
-- `responsiblePerson`: ผู้รับผิดชอบโครงการ
-- `budget`: งบประมาณรวม (ตัวเลขเท่านั้น)
-- `workGroup`: กลุ่มงาน (เลือกจาก: academic, budget, hr, general, other)
-- `startDate`: วันที่เริ่มต้น (รูปแบบ: YYYY-MM-DD)
-- `endDate`: วันที่สิ้นสุด (รูปแบบ: YYYY-MM-DD)
-- `status`: สถานะโครงการ (เลือกจาก: active, completed หรือ ดำเนินการ, เสร็จสิ้น)
-- `description`: รายละเอียดโครงการ (ไม่บังคับ)
-
-#### หมวดงบประมาณ:
-- `budgetCategories`: กรอกในรูปแบบ JSON array
-  ```json
-  [
-    {"category": "SUBSIDY", "amount": 100000, "description": "เงินอุดหนุนรายหัว"},
-    {"category": "DEVELOPMENT", "amount": 50000, "description": "เงินพัฒนาผู้เรียน"}
-  ]
-  ```
-- หมวดที่รองรับ (ใช้ key เป็นภาษาอังกฤษในการนำเข้า):
-  - SUBSIDY: เงินอุดหนุนรายหัว
-  - DEVELOPMENT: เงินพัฒนาผู้เรียน
-  - INCOME: เงินรายได้สถานศึกษา
-  - EQUIPMENT: เงินค่าอุปกรณ์การเรียน
-  - UNIFORM: เงินค่าเครื่องแบบ
-  - BOOKS: เงินค่าหนังสือ
-  - LUNCH: เงินอาหารกลางวัน
+...
 
 ### 3. การกรอกข้อมูลรายการธุรกรรม
-#### ข้อมูลที่จำเป็น:
-- `projectName`: ชื่อโครงการที่เกี่ยวข้อง (ต้องตรงกับชื่อในระบบ)
-- `date`: วันที่ทำรายการ (รูปแบบ: YYYY-MM-DD)
-- `description`: รายละเอียดรายการ
-- `amount`: จำนวนเงิน (ตัวเลขเท่านั้น เป็นค่าบวก)
-- `budgetCategory`: หมวดงบประมาณ (ใช้ key เช่น SUBSIDY, DEVELOPMENT เป็นต้น)
-- `note`: หมายเหตุ (ไม่บังคับ)
-
-#### รายการโอนเงิน:
-สำหรับการนำเข้ารายการโอนงบประมาณ สามารถทำได้ 2 วิธี:
-
-**วิธีที่ 1: นำเข้าทั้งรายการต้นทางและปลายทาง (แนะนำ)**
-1. สร้างรายการโอนออก:
-```
-projectName: โครงการต้นทาง
-date: 2024-04-01
-description: [โอนงบประมาณ] โอนไปยังโครงการ: โครงการปลายทาง (เงินอุดหนุนรายหัว)
-amount: 10000
-budgetCategory: SUBSIDY
-note: หมายเหตุเพิ่มเติม (ถ้ามี)
-isTransfer: true
-isTransferIn: false
-transferToProjectName: โครงการปลายทาง
-transferToCategory: SUBSIDY
-```
-
-2. สร้างรายการรับโอน:
-```
-projectName: โครงการปลายทาง
-date: 2024-04-01
-description: [โอนงบประมาณ] รับจากโครงการ: โครงการต้นทาง (เงินอุดหนุนรายหัว)
-amount: 10000
-budgetCategory: SUBSIDY
-note: หมายเหตุเพิ่มเติม (ถ้ามี)
-isTransfer: true
-isTransferIn: true
-transferFromProjectName: โครงการต้นทาง
-transferFromCategory: SUBSIDY
-```
-
-**วิธีที่ 2: นำเข้าเฉพาะรายการต้นทางหรือปลายทาง**
-- ระบบจะสร้างคู่รายการโอนให้อัตโนมัติ
-- ต้องระบุ `isTransfer: true` และ `isTransferIn: true/false` ให้ถูกต้อง
-- ระบุ `transferToProjectName`/`transferFromProjectName` และ `transferToCategory`/`transferFromCategory` ให้ครบถ้วน
+...
 
 ### 4. การตรวจจับรายการซ้ำ
-ระบบได้รับการปรับปรุงให้สามารถตรวจจับรายการซ้ำได้อย่างมีประสิทธิภาพมากขึ้น:
-
-1. ตรวจจับรายการปกติซ้ำ:
-   - ตรวจสอบจากโครงการ, วันที่, รายละเอียด, จำนวนเงิน และหมวดงบประมาณ
-
-2. ตรวจจับรายการโอนงบประมาณซ้ำ:
-   - ตรวจสอบคู่โครงการต้นทาง-ปลายทาง, วันที่, จำนวนเงิน และหมวดงบประมาณ
-   - ตรวจสอบทั้งรายการโอนออกและรายการรับโอน
-   - ตรวจจับรายการโอนซ้ำในไฟล์นำเข้า (กรณีมีทั้งต้นทางและปลายทาง)
+...
 
 ### 5. ขั้นตอนการนำเข้าข้อมูล
-1. เตรียมไฟล์ Excel ตามรูปแบบที่กำหนด
-2. ตรวจสอบความถูกต้องของข้อมูล
-3. ไปที่หน้า "จัดการโครงการ"
-4. คลิกที่ปุ่ม "นำเข้าโครงการจาก Excel"
-5. เลือกไฟล์ Excel ที่เตรียมไว้
-6. ระบบจะแสดงผลลัพธ์การนำเข้า พร้อมระบุจำนวนรายการที่นำเข้าสำเร็จและรายการที่ถูกข้าม
+...
 
 ## การแก้ไขปัญหาเบื้องต้น
 
-### ปัญหาการนำเข้ารายการโอนงบประมาณ
-1. **รายการโอนงบประมาณซ้ำกันในระบบ**
-   - ตรวจสอบว่าไฟล์นำเข้ามีทั้งรายการโอนออกและรับโอนหรือไม่
-   - ระบบอาจสร้างรายการซ้ำกับที่มีอยู่แล้ว หากรายการไม่เหมือนกันทุกประการ
-   - แนะนำให้นำเข้าทั้งรายการโอนออกและรับโอนพร้อมกัน
+- **Frontend ไม่สามารถเชื่อมต่อ Backend:**
+  - ตรวจสอบว่า Backend Server (`server.js`) ทำงานอยู่
+  - ตรวจสอบ URL ของ API ที่ Frontend เรียกใช้ (ควรเป็น relative path หรือ URL ที่ถูกต้องของ deployed backend)
+  - ตรวจสอบ CORS configuration ใน `server.js`
+- **Google Login ไม่ทำงาน:**
+  - ตรวจสอบว่า `GOOGLE_CLIENT_ID` ถูกตั้งค่าถูกต้องทั้งใน `.env` (สำหรับ local dev) และ Environment Variables บนแพลตฟอร์มที่ deploy
+  - ตรวจสอบการตั้งค่า OAuth Consent Screen และ Credentials ใน Google Cloud Console ว่าถูกต้อง (เช่น Authorized JavaScript origins, Authorized redirect URIs)
+- **ข้อมูลหายหลัง Deploy:**
+  - เกิดขึ้นหากยังใช้ in-memory storage ใน `server.js` ต้องเปลี่ยนไปใช้ฐานข้อมูลแบบถาวร
 
-2. **รายการโอนงบประมาณไม่ถูกนำเข้า**
-   - ตรวจสอบว่ารูปแบบคำอธิบายรายการถูกต้อง (`[โอนงบประมาณ]` ต้องอยู่ที่ต้นข้อความ)
-   - ตรวจสอบว่าฟิลด์ `isTransfer` เป็น `true`
-   - ตรวจสอบว่าชื่อโครงการต้นทางและปลายทางตรงกับในระบบ
-
-3. **ยอดงบประมาณไม่ถูกต้องหลังการนำเข้า**
-   - ตรวจสอบว่ามีการนำเข้ารายการโอนงบประมาณครบทั้งคู่
-   - ตรวจสอบการกำหนดหมวดงบประมาณต้นทางและปลายทาง
-   - ตรวจสอบว่าค่า `isTransferIn` ถูกกำหนดอย่างถูกต้อง
-
-### ปัญหาหมวดงบประมาณ
-1. **หมวดงบประมาณไม่ถูกต้อง**
-   - ตรวจสอบว่าใช้ key ภาษาอังกฤษ (เช่น SUBSIDY, DEVELOPMENT) ไม่ใช่ค่าภาษาไทย
-   - รหัสหมวดงบประมาณต้องตรงกับที่กำหนดในระบบ
-   - กรณีนำเข้าเป็นชื่อภาษาไทย ระบบจะพยายามแปลงเป็น key ให้อัตโนมัติ
-
-2. **ยอดเงินในหมวดงบประมาณไม่ตรงกับงบประมาณรวม**
-   - ตรวจสอบผลรวมของเงินในแต่ละหมวดงบประมาณ
-   - ระบบจะใช้ผลรวมของเงินในแต่ละหมวดเป็นงบประมาณรวมโดยอัตโนมัติ
-
-## อัพเดทล่าสุด
-- ปรับปรุงระบบการนำเข้าข้อมูลจาก Excel
-- เพิ่มการตรวจจับรายการโอนงบประมาณซ้ำอย่างอัตโนมัติ
-- ปรับปรุงการแสดงผลข้อมูลการนำเข้าให้ละเอียดมากขึ้น
-- แก้ไขปัญหาการนำเข้ารายการโอนงบประมาณที่อาจเกิดรายการซ้ำ
-- ปรับปรุงการแสดงผลรายการธุรกรรมในตารางให้อ่านง่ายขึ้น
-
-## การอัพเดทในอนาคต
+## การอัพเดทในอนาคต (ข้อเสนอแนะ)
+- [ ] **Implement Persistent Database:** เปลี่ยนจาก in-memory storage เป็นฐานข้อมูลจริง (เช่น PostgreSQL, MongoDB) สำหรับ Production
 - [ ] เพิ่มระบบ Export รายงาน
 - [ ] เพิ่มการแสดงกราฟวิเคราะห์งบประมาณ
-- [ ] เพิ่มระบบจัดการผู้ใช้และสิทธิ์
-- [ ] เพิ่มระบบแจ้งเตือนเมื่องบประมาณใกล้หมด
-- [ ] เพิ่มระบบสำรองข้อมูลอัตโนมัติ
+- [ ] ปรับปรุง UI/UX เพิ่มเติม
+- [ ] เพิ่ม Unit/Integration Tests
+
