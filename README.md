@@ -1,216 +1,179 @@
-# ระบบควบคุมงบประมาณโครงการ (Project Budget Control System)
+# Budget Control Application (Rewritten)
 
-ระบบควบคุมงบประมาณโครงการ เป็นแอปพลิเคชันสำหรับบริหารจัดการงบประมาณของโครงการต่างๆ ภายในองค์กร โดยมีฟังก์ชันการทำงานที่ครอบคลุมการบริหารจัดการงบประมาณอย่างครบถ้วน
+## Overview
 
-## ฟังก์ชันการทำงานหลัก
+This project is a rewritten version of the Budget Control application, originally built with React and an Express backend using an in-memory database. This version utilizes a PostgreSQL database for persistent storage, incorporates Google OAuth for authentication, and includes various improvements and fixes.
 
-### 1. การจัดการโครงการ (Project Management)
-- สร้างโครงการใหม่
-- กำหนดรายละเอียดโครงการ:
-  - ชื่อโครงการ
-  - ผู้รับผิดชอบ
-  - งบประมาณรวม
-  - หมวดงบประมาณ (เงินอุดหนุนรายหัว, เงินพัฒนาผู้เรียน, ฯลฯ)
-  - กลุ่มงาน (วิชาการ, งบประมาณ, บุคลากร, บริหารทั่วไป, อื่นๆ)
-  - วันที่เริ่มต้นและสิ้นสุดโครงการ
-  - สถานะโครงการ (กำลังดำเนินการ, เสร็จสิ้น)
-  - รายละเอียดโครงการ
-- แก้ไขข้อมูลโครงการ
-- ดูรายละเอียดโครงการ
-- นำเข้าโครงการจากไฟล์ Excel
-- ส่งออกข้อมูลโครงการเป็นไฟล์ Excel
+**Thai:** โปรเจกต์นี้เป็นเวอร์ชันที่เขียนขึ้นใหม่ของแอปพลิเคชัน Budget Control ซึ่งเดิมสร้างด้วย React และ Express backend โดยใช้ฐานข้อมูลในหน่วยความจำ เวอร์ชันนี้ใช้ฐานข้อมูล PostgreSQL สำหรับการจัดเก็บข้อมูลถาวร, ใช้ Google OAuth สำหรับการยืนยันตัวตน และมีการปรับปรุงแก้ไขข้อผิดพลาดต่างๆ
 
-### 2. การบริหารงบประมาณ (Budget Management)
-- บันทึกรายการใช้จ่ายงบประมาณ
-- แสดงยอดงบประมาณคงเหลือแยกตามหมวด
-- คำนวณงบประมาณอัตโนมัติ:
-  - งบประมาณทั้งหมด
-  - ยอดใช้จ่าย
-  - งบประมาณคงเหลือ
-  - เปอร์เซ็นต์การใช้งบประมาณ
-- โอนงบประมาณระหว่างโครงการ:
-  - โอนระหว่างหมวดงบประมาณเดียวกัน
-  - โอนระหว่างหมวดงบประมาณต่างกัน
-  - บันทึกประวัติการโอนอัตโนมัติ
-  - แสดงการแจ้งเตือนเมื่อโอนต่างหมวด
+**Key Features:**
 
-### 3. การแสดงผลข้อมูล (Data Display)
-- แสดงภาพรวมงบประมาณทั้งหมด
-- แสดงรายละเอียดการใช้จ่ายแยกตามโครงการ
-- แสดงรายละเอียดแยกตามหมวดงบประมาณ
-- แสดงประวัติการทำรายการ:
-  - รายการใช้จ่าย
-  - การโอนงบประมาณ
-- แสดงสถานะโครงการ
-- Progress bar แสดงความคืบหน้าการใช้งบประมาณ
+*   **User Authentication:** Secure login via Google OAuth.
+*   **User Management (Admin):** Admins can approve new users, manage roles (admin/user), and delete users.
+*   **Project Management:** Create, Read, Update, Delete (CRUD) projects.
+*   **Transaction Management:** CRUD operations for income/expense transactions linked to projects, with pagination.
+*   **Budget Summary:** View overall budget summary and per-project summaries.
+*   **Excel Export:** Export transactions for a selected project to an Excel file.
+*   **Database:** Uses PostgreSQL for data persistence.
+*   **Deployment:** Configured for deployment on Render.com (using `render.yaml`).
+*   **Code Comments:** Includes detailed comments and Thai explanations for major components.
 
-### 4. การกรองและค้นหาข้อมูล (Filtering)
-- กรองตามกลุ่มงาน
-- กรองตามสถานะโครงการ
-- กรองตามหมวดงบประมาณ
-- ค้นหาโครงการ
-- กรองตามช่วงเวลา
+## Project Structure
 
-### 5. การจัดการผู้ใช้ (User Management)
-- เข้าสู่ระบบด้วยบัญชี Google (@react-oauth/google)
-- กำหนดสิทธิ์ผู้ใช้ (Admin, User)
-- อนุมัติผู้ใช้ใหม่
-- จัดการผู้ใช้ (ดูรายชื่อ, เปลี่ยนบทบาท, ลบ)
-- กำหนด Admin เริ่มต้น (nutrawee@subyaischool.ac.th)
+The project is organized into two main directories:
 
-### 6. การตรวจสอบความถูกต้อง (Validation)
-- ตรวจสอบยอดงบประมาณคงเหลือก่อนทำรายการ
-- ตรวจสอบความถูกต้องของข้อมูลที่กรอก
-- แจ้งเตือนเมื่อข้อมูลไม่ถูกต้อง
-- ป้องกันการทำรายการที่เกินงบประมาณ
+*   `/client`: Contains the React frontend application.
+*   `/server`: Contains the Node.js/Express backend API.
 
-## การติดตั้งและใช้งาน (สำหรับ Development)
-
-### ข้อกำหนดเบื้องต้น
-- ติดตั้ง Node.js (เวอร์ชัน 16.x ขึ้นไปแนะนำ)
-- Git
-
-### ขั้นตอนการติดตั้ง
-1.  **Clone Repository:**
-    ```bash
-    git clone https://github.com/project-sy789/budget-control.git
-    cd budget-control
-    ```
-2.  **ติดตั้ง Dependencies:**
-    ```bash
-    npm install
-    ```
-3.  **ตั้งค่า Environment Variables:**
-    - สร้างไฟล์ `.env` ใน root directory ของโปรเจกต์ โดยคัดลอกจาก `.env.example`
-    - แก้ไขไฟล์ `.env` และใส่ `GOOGLE_CLIENT_ID` ของคุณ:
-      ```
-      REACT_APP_GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID_HERE
-      ```
-    *หมายเหตุ: `server.js` จะใช้ค่านี้ผ่าน `process.env.GOOGLE_CLIENT_ID` หากไม่ได้ตั้งค่าใน environment ของ server โดยตรง*
-
-### การรันแอปพลิเคชัน (Development Mode)
-1.  **รัน Backend Server (Express):**
-    เปิด Terminal แรก และรัน:
-    ```bash
-    node server.js
-    ```
-    เซิร์ฟเวอร์จะทำงานที่ `http://localhost:3001` (หรือ port ที่กำหนดโดย `PORT` environment variable)
-
-2.  **รัน Frontend (React App):**
-    เปิด Terminal ที่สอง และรัน:
-    ```bash
-    npm start
-    ```
-    แอปพลิเคชันจะเปิดในเบราว์เซอร์ที่ `http://localhost:3000`
-
-## เทคโนโลยีที่ใช้
-
-- **Frontend:**
-  - React
-  - TypeScript
-  - Material-UI (MUI)
-  - React Router
-  - React Context API
-  - @react-oauth/google (สำหรับ Google Login)
-  - Date-fns
-  - xlsx (สำหรับ Import/Export Excel)
-- **Backend:**
-  - Node.js
-  - Express
-  - cors
-  - google-auth-library (สำหรับ Verify Google Token)
-  - uuid (สำหรับสร้าง ID)
-- **Development & Build:**
-  - npm
-  - Create React App (react-scripts)
-
-## โครงสร้างโปรเจค
 ```
-budget-control/
-├── README.md
-├── package.json
-├── package-lock.json
-├── tsconfig.json
-├── .gitignore
-├── .env.example        # ตัวอย่าง Environment Variables
-├── server.js           # Backend Express Server
-├── public/             # Static files (HTML, favicon, etc.)
-├── src/                # Frontend React code
-│   ├── components/     # React components
-│   ├── contexts/       # React Context providers (Auth, Budget)
-│   ├── services/       # Service functions (AuthService.js)
-│   ├── types/          # TypeScript Interfaces
-│   ├── utils/          # Utility Functions
-│   ├── App.tsx         # Main application component
-│   └── index.tsx       # Application entry point (เดิมคือ main.tsx)
-├── build/              # Frontend build output (หลังรัน npm run build)
-├── templates/          # Excel templates
-│   └── project_export_template.xlsx
-├── scripts/            # Utility scripts
-│   └── create_excel_template.py
-├── render.yaml         # Deployment config for Render.com (ตัวอย่าง)
-└── Procfile            # Deployment config for Railway/Heroku (ตัวอย่าง)
+budget_control_rewrite/
+├── client/             # React Frontend
+│   ├── public/
+│   ├── src/
+│   │   ├── components/   # UI Components (Login, Layout, ProjectMgmt, etc.)
+│   │   ├── contexts/     # React Contexts (Auth, Budget)
+│   │   ├── services/     # API interaction services (AuthService)
+│   │   ├── types/        # TypeScript type definitions
+│   │   ├── App.tsx       # Main application component & routing
+│   │   ├── index.tsx     # Entry point
+│   │   └── theme.ts      # MUI theme configuration
+│   ├── .env.example    # Example environment variables for client
+│   ├── package.json
+│   └── ...             # Other config files (tsconfig, etc.)
+├── server/             # Node.js/Express Backend
+│   ├── config/         # Configuration (db connection, jwt, port)
+│   ├── controllers/    # Route handlers (logic for requests)
+│   ├── middleware/     # Express middleware (auth, error handling)
+│   ├── models/         # Database interaction logic (User, Project, Transaction)
+│   ├── routes/         # API route definitions
+│   ├── services/       # Business logic services (if needed)
+│   ├── utils/          # Utility functions
+│   ├── .env.example    # Example environment variables for server
+│   ├── package.json
+│   ├── server.js       # Main backend application entry point
+│   └── ...
+├── render.yaml         # Deployment configuration for Render.com
+├── schema.sql          # PostgreSQL database schema
+└── README.md           # This file
 ```
 
-## การ Deploy
+## Technology Stack
 
-แอปพลิเคชันนี้ถูกออกแบบมาเพื่อ deploy เป็น Node.js application บนแพลตฟอร์ม เช่น Render.com หรือ Railway.app
+*   **Frontend:** React, TypeScript, Material UI (MUI), React Router, Axios (or Fetch API), Google OAuth Library (`@react-oauth/google`), Date-fns, JWT Decode
+*   **Backend:** Node.js, Express, PostgreSQL (`pg` library), JWT (`jsonwebtoken`), Google Auth Library (`google-auth-library`), CORS, Dotenv, XLSX (for Excel export)
+*   **Database:** PostgreSQL
+*   **Deployment:** Render.com (Static Site + Web Service + PostgreSQL)
 
-### ขั้นตอนทั่วไป:
-1.  **Push โค้ดไปยัง Git Repository** (เช่น GitHub, GitLab)
-2.  **สร้าง Service/App ใหม่บนแพลตฟอร์ม:**
-    - เชื่อมต่อกับ Git repository ของคุณ
-3.  **ตั้งค่า Build & Start Commands:**
-    - **Build Command:** `npm install && npm run build`
-    - **Start Command:** `npm run start:prod` (ซึ่งจะรัน `node server.js`)
-4.  **ตั้งค่า Environment Variables:**
-    - `GOOGLE_CLIENT_ID`: ใส่ Google Client ID ของคุณ
-    - `NODE_ENV`: ตั้งค่าเป็น `production` (แพลตฟอร์มส่วนใหญ่มักตั้งค่าให้อัตโนมัติ)
-    - (Optional) `PORT`: แพลตฟอร์มส่วนใหญ่จะกำหนด port ให้อัตโนมัติ
-5.  **(สำคัญ) ตั้งค่าฐานข้อมูล:**
-    - `server.js` ปัจจุบันใช้ **in-memory storage** ซึ่งข้อมูลจะหายไปเมื่อเซิร์ฟเวอร์รีสตาร์ท
-    - สำหรับ Production **ต้อง** เปลี่ยนไปใช้ฐานข้อมูลแบบถาวร เช่น PostgreSQL, MongoDB ที่ให้บริการโดยแพลตฟอร์ม หรือเชื่อมต่อกับฐานข้อมูลภายนอก
-    - แก้ไข `server.js` ในส่วน API routes (Projects, Transactions, Users) ให้บันทึกและอ่านข้อมูลจากฐานข้อมูลที่คุณเลือก
+## Setup and Installation
 
-### ตัวอย่างไฟล์ Config:
-- `render.yaml`: สำหรับ Render.com (ต้องปรับแก้ตามต้องการ)
-- `Procfile`: สำหรับ Railway.app / Heroku (ระบุ `web: npm run start:prod`)
+**Prerequisites:**
 
-## การนำเข้าข้อมูลจาก Excel
+*   Node.js (v18 or later recommended)
+*   npm or yarn
+*   PostgreSQL database instance (local or cloud-based)
+*   Google Cloud Platform project with OAuth 2.0 Client ID configured.
 
-(ส่วนนี้ยังคงเหมือนเดิม - ตรวจสอบความถูกต้องอีกครั้งหากมีการเปลี่ยนแปลง API)
+**Steps:**
 
-### 1. การเตรียมไฟล์ Excel
-...
+1.  **Clone the Repository:**
+    ```bash
+    # Not applicable in this context, assuming code is provided directly
+    ```
 
-### 2. การกรอกข้อมูลโครงการ
-...
+2.  **Backend Setup:**
+    *   Navigate to the `server` directory: `cd server`
+    *   Install dependencies: `npm install`
+    *   Create a `.env` file by copying `.env.example`:
+        ```bash
+        cp .env.example .env
+        ```
+    *   **Configure `.env` variables (see Environment Variables section below).** Crucially, set `DATABASE_URL`, `GOOGLE_CLIENT_ID`, and `JWT_SECRET`.
+    *   Apply the database schema: Connect to your PostgreSQL database and run the commands in `schema.sql`.
+        ```sql
+        -- Example using psql
+        -- psql -U your_db_user -d your_db_name -a -f ../schema.sql
+        ```
 
-### 3. การกรอกข้อมูลรายการธุรกรรม
-...
+3.  **Frontend Setup:**
+    *   Navigate to the `client` directory: `cd ../client`
+    *   Install dependencies: `npm install`
+    *   Create a `.env` file by copying `.env.example`:
+        ```bash
+        cp .env.example .env
+        ```
+    *   **Configure `.env` variables (see Environment Variables section below).** Set `REACT_APP_GOOGLE_CLIENT_ID` and `REACT_APP_API_URL` (for local development).
 
-### 4. การตรวจจับรายการซ้ำ
-...
+4.  **Running Locally:**
+    *   **Start Backend:** In the `server` directory, run: `npm run dev` (uses nodemon for auto-restarts) or `npm start`.
+    *   **Start Frontend:** In the `client` directory, run: `npm start`.
+    *   Open your browser to `http://localhost:3000` (or the port specified by React).
 
-### 5. ขั้นตอนการนำเข้าข้อมูล
-...
+## Environment Variables
 
-## การแก้ไขปัญหาเบื้องต้น
+**Thai:** ตัวแปรสภาพแวดล้อมที่จำเป็นสำหรับการตั้งค่าโปรเจกต์
 
-- **Frontend ไม่สามารถเชื่อมต่อ Backend:**
-  - ตรวจสอบว่า Backend Server (`server.js`) ทำงานอยู่
-  - ตรวจสอบ URL ของ API ที่ Frontend เรียกใช้ (ควรเป็น relative path หรือ URL ที่ถูกต้องของ deployed backend)
-  - ตรวจสอบ CORS configuration ใน `server.js`
-- **Google Login ไม่ทำงาน:**
-  - ตรวจสอบว่า `GOOGLE_CLIENT_ID` ถูกตั้งค่าถูกต้องทั้งใน `.env` (สำหรับ local dev) และ Environment Variables บนแพลตฟอร์มที่ deploy
-  - ตรวจสอบการตั้งค่า OAuth Consent Screen และ Credentials ใน Google Cloud Console ว่าถูกต้อง (เช่น Authorized JavaScript origins, Authorized redirect URIs)
-- **ข้อมูลหายหลัง Deploy:**
-  - เกิดขึ้นหากยังใช้ in-memory storage ใน `server.js` ต้องเปลี่ยนไปใช้ฐานข้อมูลแบบถาวร
+**Server (`/server/.env`):**
 
-## การอัพเดทในอนาคต (ข้อเสนอแนะ)
-- [ ] **Implement Persistent Database:** เปลี่ยนจาก in-memory storage เป็นฐานข้อมูลจริง (เช่น PostgreSQL, MongoDB) สำหรับ Production
-- [ ] เพิ่มระบบ Export รายงาน
-- [ ] เพิ่มการแสดงกราฟวิเคราะห์งบประมาณ
-- [ ] ปรับปรุง UI/UX เพิ่มเติม
-- [ ] เพิ่ม Unit/Integration Tests
+*   `NODE_ENV`: Set to `development` or `production`.
+*   `PORT`: Port for the backend server (e.g., `5000`).
+*   `DATABASE_URL`: Connection string for your PostgreSQL database.
+    *   Format: `postgresql://DB_USER:DB_PASSWORD@DB_HOST:DB_PORT/DB_NAME`
+*   `GOOGLE_CLIENT_ID`: Your Google OAuth Client ID (obtained from Google Cloud Console).
+*   `JWT_SECRET`: A strong, secret string used for signing JWT tokens (generate a random one).
+*   `JWT_EXPIRES_IN`: JWT token expiration time (e.g., `7d`, `24h`).
+
+**Client (`/client/.env`):**
+
+*   `REACT_APP_GOOGLE_CLIENT_ID`: Your Google OAuth Client ID (same as the server one).
+*   `REACT_APP_API_URL`: The base URL of your backend API.
+    *   For local development: `http://localhost:5000/api` (use the port your backend is running on).
+    *   For production (Render): This will be set automatically by Render based on `render.yaml`.
+
+## Database
+
+*   The database schema is defined in `schema.sql`. Run this script against your PostgreSQL database to create the necessary tables (`users`, `projects`, `transactions`).
+*   The backend connects to the database using the `DATABASE_URL` environment variable.
+
+## Deployment (Render.com)
+
+This project includes a `render.yaml` file for easy deployment on Render.com.
+
+**Steps:**
+
+1.  **Create a Render Account:** Sign up at [render.com](https://render.com/).
+2.  **Create a New Blueprint Instance:**
+    *   Go to "Blueprints" and click "New Blueprint Instance".
+    *   Connect your Git repository (GitHub, GitLab, Bitbucket) containing this project.
+    *   Render will automatically detect `render.yaml`.
+3.  **Configure Services:**
+    *   Render will propose services based on `render.yaml` (backend, frontend, database).
+    *   **Database:** Ensure the PostgreSQL database (`budget-control-db`) is configured (choose a plan, region, etc.).
+    *   **Backend (`budget-control-backend`):**
+        *   Verify the build and start commands.
+        *   Go to the "Environment" tab.
+        *   The `DATABASE_URL` should be automatically linked from the database service.
+        *   The `JWT_SECRET` will be generated by Render (or you can set your own).
+        *   **Crucially, add a secret environment variable for `GOOGLE_CLIENT_ID` with your actual Google Client ID.**
+    *   **Frontend (`budget-control-frontend`):**
+        *   Verify the build command and publish directory.
+        *   Go to the "Environment" tab.
+        *   The `REACT_APP_API_URL` should be automatically linked from the backend service.
+        *   **Crucially, add a secret environment variable for `REACT_APP_GOOGLE_CLIENT_ID` with your actual Google Client ID.**
+4.  **Deploy:** Click "Create Blueprint Instance" or "Deploy". Render will build and deploy your services.
+5.  **Access:** Once deployed, Render will provide public URLs for your frontend and backend.
+
+**Important Notes for Deployment:**
+
+*   **Environment Variables:** Ensure all required environment variables, especially secrets like `GOOGLE_CLIENT_ID` and `JWT_SECRET`, are set correctly in the Render dashboard environment sections for both the backend and frontend services.
+*   **Database Connection:** The `DATABASE_URL` is automatically provided by Render when linking the database service.
+*   **Google OAuth Configuration:** Make sure your Google Cloud OAuth Client ID has the correct authorized JavaScript origins (for the frontend URL provided by Render) and authorized redirect URIs (if applicable, though this setup uses token-based flow).
+
+## Code Explanations (Thai)
+
+Detailed explanations in Thai are provided as comments within the source code files for major components, including:
+
+*   Backend: `server.js`, controllers, models, middleware, routes, config.
+*   Frontend: `App.tsx`, contexts (`AuthContext`, `BudgetContext`), services (`AuthService`), main components (`Login`, `Layout`, `ProjectManagement`, `BudgetControl`, etc.).
+
+**Thai:** คำอธิบายโค้ดโดยละเอียดเป็นภาษาไทยมีอยู่ในรูปแบบคอมเมนต์ภายในไฟล์ซอร์สโค้ดสำหรับองค์ประกอบหลักต่างๆ ทั้งในส่วนของ Backend และ Frontend
 

@@ -1,16 +1,74 @@
-# ไฟล์ configuration สำหรับ deploy บน render.com
+# render.yaml - Configuration for deploying on Render.com
+
+# Thai: ไฟล์กำหนดค่าสำหรับ deploy โปรเจกต์บน Render.com
+# ประกอบด้วย 2 services: backend (Node.js) และ frontend (Static Site)
+
 services:
-  # บริการหลักสำหรับแอปพลิเคชัน
+  # Backend Service (Node.js/Express)
+  # Thai: การตั้งค่าสำหรับ Backend API (Node.js)
   - type: web
-    name: budget-control
+    name: budget-control-backend
     env: node
-    buildCommand: npm install && npm run build
-    startCommand: node server.js
+    # Thai: ระบุตำแหน่งของโค้ด backend
+    rootDir: server
+    # Thai: คำสั่งสำหรับติดตั้ง dependencies และ build (ถ้ามี)
+    buildCommand: "npm install"
+    # Thai: คำสั่งสำหรับรัน backend server
+    startCommand: "node server.js"
+    # Thai: ตั้งค่า Environment Variables (ต้องไปกำหนดค่าจริงใน Render dashboard)
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL # Provided by Render PostgreSQL addon
+        fromDatabase:
+          name: budget-control-db # Name of the Render PostgreSQL database service
+          property: connectionString
       - key: PORT
-        value: 3000
+        value: 10000 # Render automatically assigns port, but good practice to define
       - key: GOOGLE_CLIENT_ID
-        sync: false # ต้องตั้งค่าด้วยตนเองในแดชบอร์ดของ render.com
-    autoDeploy: true
+        sync: false # Secret - Set in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true # Let Render generate a secure secret
+      - key: JWT_EXPIRES_IN
+        value: "7d"
+      # Add other backend env vars if needed
+
+  # Frontend Service (React Static Site)
+  # Thai: การตั้งค่าสำหรับ Frontend (React Build - Static Site)
+  - type: static
+    name: budget-control-frontend
+    # Thai: ระบุตำแหน่งของโค้ด frontend
+    rootDir: client
+    # Thai: คำสั่งสำหรับติดตั้ง dependencies และ build frontend
+    buildCommand: "npm install && npm run build"
+    # Thai: ระบุโฟลเดอร์ที่เก็บผลลัพธ์จากการ build
+    publishDir: build
+    # Thai: ตั้งค่า Rewrite Rule เพื่อให้ React Router ทำงานได้อย่างถูกต้อง
+    # Redirect all non-file requests to index.html
+    routes:
+      - type: rewrite
+        source: "/*"
+        destination: "/index.html"
+    # Thai: ตั้งค่า Environment Variables สำหรับตอน build frontend
+    envVars:
+      - key: REACT_APP_GOOGLE_CLIENT_ID
+        sync: false # Secret - Set in Render dashboard
+      # Thai: ชี้ไปยัง URL ของ backend service ที่ deploy บน Render
+      - key: REACT_APP_API_URL
+        fromService:
+          type: web
+          name: budget-control-backend # Must match the backend service name
+          property: url # Get the public URL of the backend service
+
+# Database Service (PostgreSQL)
+# Thai: การตั้งค่าสำหรับฐานข้อมูล PostgreSQL (สร้างผ่าน Render dashboard หรือใช้ที่มีอยู่)
+# This defines the database the backend service connects to.
+# You typically create this via the Render dashboard.
+# Ensure the name matches `fromDatabase.name` in the backend service.
+databases:
+  - name: budget-control-db
+    databaseName: budget_control # Optional: specify the database name within the instance
+    user: budget_user # Optional: specify the user
+    plan: free # Or your desired plan
+    # region: singapore # Optional: specify region
+
