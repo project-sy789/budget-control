@@ -35,7 +35,7 @@ services:
 
   # Frontend Service (React Static Site)
   # Thai: การตั้งค่าสำหรับ Frontend (React Build - Static Site)
-  - type: static
+  - type: static_site
     name: budget-control-frontend
     # Thai: ระบุตำแหน่งของโค้ด frontend
     rootDir: client
