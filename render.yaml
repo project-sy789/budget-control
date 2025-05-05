@@ -54,12 +54,12 @@ services:
     envVars:
       - key: REACT_APP_GOOGLE_CLIENT_ID
         sync: false # Secret - Set in Render dashboard
-      # Thai: ชี้ไปยัง URL ของ backend service ที่ deploy บน Render
+      # Thai: กำหนดค่า URL ของ backend service ด้วยตนเองใน Render Dashboard
+      # หลังจาก backend service ถูก deploy และมี URL สาธารณะแล้ว
+      # - key: REACT_APP_API_URL
+      #   value: <URL ของ backend service>/api # ตัวอย่าง: https://your-backend-name.onrender.com/api
       - key: REACT_APP_API_URL
-        fromService:
-          type: web
-          name: budget-control-backend # Must match the backend service name
-          property: url # Get the public URL of the backend service
+        sync: false # Prompt for value in Render Dashboard
 
 # Database Service (PostgreSQL)
 # Thai: การตั้งค่าสำหรับฐานข้อมูล PostgreSQL (สร้างผ่าน Render dashboard หรือใช้ที่มีอยู่)
