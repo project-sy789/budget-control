@@ -35,14 +35,15 @@ services:
 
   # Frontend Service (React Static Site)
   # Thai: การตั้งค่าสำหรับ Frontend (React Build - Static Site)
-  - type: static_site
+  - type: web
     name: budget-control-frontend
+    runtime: static
     # Thai: ระบุตำแหน่งของโค้ด frontend
     rootDir: client
     # Thai: คำสั่งสำหรับติดตั้ง dependencies และ build frontend
     buildCommand: "npm install && npm run build"
     # Thai: ระบุโฟลเดอร์ที่เก็บผลลัพธ์จากการ build
-    publishDir: build
+    staticPublishPath: build
     # Thai: ตั้งค่า Rewrite Rule เพื่อให้ React Router ทำงานได้อย่างถูกต้อง
     # Redirect all non-file requests to index.html
     routes:
