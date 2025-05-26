@@ -161,17 +161,12 @@ const ProjectManagement: React.FC = () => {
             } catch (error: any) {
                 console.error("Error deleting project:", error);
                 // Show error in confirm dialog or main page?
-                setBudgetState(prev => ({ ...prev, error: error.message || "เกิดข้อผิดพลาดในการลบโครงการ" }));
+                // The error should be set in budgetState.error by the deleteProject context function.
+                // We just need to ensure the dialog is closed.
+                console.error("Error deleting project:", error);
                 handleCloseDialogs(); // Close dialog even if error occurs
             }
         }
-    };
-
-    // Function to set global error state (from context)
-    const setBudgetState = (updater: (prevState: typeof budgetState) => typeof budgetState) => {
-        // This is a placeholder - BudgetContext needs to expose a way to set errors
-        // For now, we'll just log it or potentially use a local state for dialog errors
-        console.error("Error needs to be set in BudgetContext state");
     };
 
     return (

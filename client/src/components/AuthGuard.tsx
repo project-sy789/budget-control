@@ -34,21 +34,11 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ requiredRole }) => {
     // Thai: ถ้ายังไม่ได้ล็อกอิน ให้ redirect ไปหน้า Login พร้อมจำ state เดิมไว้เผื่อ redirect กลับมา
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
-
-  // Thai: ตรวจสอบว่าบัญชีผู้ใช้ได้รับการอนุมัติหรือยัง (ถ้ายังไม่อนุมัติ อาจแสดงหน้า "รอการอนุมัติ" หรือ redirect ไปหน้าอื่น)
-  // For now, we assume the backend check in protect middleware is sufficient, 
-  // but a frontend check can provide a better user experience.
-  if (!authState.user.approved) {
-      console.log("AuthGuard: User not approved. Access denied.");
-      // Option 1: Redirect to a specific "pending approval" page
-      // return <Navigate to="/pending-approval" replace />;
-      // Option 2: Redirect to login with an error message (less ideal)
-      // return <Navigate to="/login" state={{ error: "Account not approved" }} replace />;
-      // Option 3: Show a simple message (if within a layout)
-      // For now, redirecting to login might be simplest, though potentially confusing.
-      // Let's redirect to root and rely on maybe a message shown in the layout or project list.
-      // Or, prevent login entirely if not approved (handled by backend currently).
-      // Let's assume if they logged in, they are approved (as per backend logic).
+  // Thai: ตรวจสอบว่าบัญชีผู้ใช้ได้รับการอนุมัติหรือยัง
+  // If user exists but is not approved, redirect to login with a message.
+  else if (authState.user && authState.user.approved === false) {
+    console.log("AuthGuard: Unapproved user attempting to access route. Redirecting to login.");
+    return <Navigate to="/login" state={{ from: location, error: "Your account is pending approval by an administrator." }} replace />;
   }
 
   // Thai: ตรวจสอบ Role ของผู้ใช้

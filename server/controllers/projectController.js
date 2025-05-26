@@ -48,11 +48,15 @@ exports.getAllProjects = async (req, res, next) => {
     // Optional: Enhance with budget summary for each project
     const projectsWithSummary = await Promise.all(projects.map(async (project) => {
         const summary = await Transaction.getProjectBudgetSummary(project.id);
-        const balance = parseFloat(project.initial_budget) + parseFloat(summary.total_income) - parseFloat(summary.total_expense);
+        const initialBudget = parseFloat(project.initial_budget || 0);
+        const totalIncome = parseFloat(summary.total_income || 0);
+        const totalExpense = parseFloat(summary.total_expense || 0);
+        const balance = initialBudget + totalIncome - totalExpense;
         return {
             ...project,
-            total_income: parseFloat(summary.total_income),
-            total_expense: parseFloat(summary.total_expense),
+            initial_budget: initialBudget, // Ensure this is also the parsed number
+            total_income: totalIncome,
+            total_expense: totalExpense,
             current_balance: balance
         };
     }));
@@ -88,11 +92,15 @@ exports.getProjectById = async (req, res, next) => {
 
     // Optional: Add budget summary
     const summary = await Transaction.getProjectBudgetSummary(project.id);
-    const balance = parseFloat(project.initial_budget) + parseFloat(summary.total_income) - parseFloat(summary.total_expense);
+    const initialBudget = parseFloat(project.initial_budget || 0);
+    const totalIncome = parseFloat(summary.total_income || 0);
+    const totalExpense = parseFloat(summary.total_expense || 0);
+    const balance = initialBudget + totalIncome - totalExpense;
     const projectWithSummary = {
         ...project,
-        total_income: parseFloat(summary.total_income),
-        total_expense: parseFloat(summary.total_expense),
+        initial_budget: initialBudget, // Ensure this is also the parsed number
+        total_income: totalIncome,
+        total_expense: totalExpense,
         current_balance: balance
     };
 

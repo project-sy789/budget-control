@@ -99,6 +99,7 @@ const BudgetControl: React.FC = () => {
     useState<Transaction | null>(null);
   const [formData, setFormData] = useState(initialTransactionFormState);
   const [formError, setFormError] = useState<string | null>(null);
+  const [projectSelectionError, setProjectSelectionError] = useState<string | null>(null); // For project selection errors
   const [isEditMode, setIsEditMode] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -139,11 +140,9 @@ const BudgetControl: React.FC = () => {
 
   // Thai: เปิด Dialog สำหรับเพิ่มธุรกรรม
   const handleAddTransaction = () => {
+    setProjectSelectionError(null); // Clear previous selection error
     if (!budgetState.currentProject) {
-      setBudgetState((prev) => ({
-        ...prev,
-        error: "กรุณาเลือกโครงการก่อนเพิ่มธุรกรรม",
-      }));
+      setProjectSelectionError("กรุณาเลือกโครงการก่อนเพิ่มธุรกรรม");
       return;
     }
     setIsEditMode(false);
@@ -235,10 +234,7 @@ const BudgetControl: React.FC = () => {
         handleCloseDialogs();
       } catch (error: any) {
         console.error("Error deleting transaction:", error);
-        setBudgetState((prev) => ({
-          ...prev,
-          error: error.message || "เกิดข้อผิดพลาดในการลบธุรกรรม",
-        }));
+        // Error should be set in budgetState.error by deleteTransaction context function.
         handleCloseDialogs();
       }
     }
@@ -267,29 +263,22 @@ const BudgetControl: React.FC = () => {
 
   // Thai: จัดการการ Export ข้อมูล
   const handleExport = async () => {
+    setProjectSelectionError(null); // Clear previous selection error
     if (!budgetState.currentProject) {
-      setBudgetState((prev) => ({
-        ...prev,
-        error: "กรุณาเลือกโครงการก่อนส่งออกข้อมูล",
-      }));
+      setProjectSelectionError("กรุณาเลือกโครงการก่อนส่งออกข้อมูล");
       return;
     }
     setExporting(true);
-    setBudgetState((prev) => ({ ...prev, error: null })); // Clear previous errors
+    // budgetState.error should be cleared by exportProjectTransactions or handled globally
     try {
       await exportProjectTransactions(budgetState.currentProject.id);
     } catch (error: any) {
       // Error is already set in BudgetContext by exportProjectTransactions
       console.error("Export failed:", error);
+      // No need to set projectSelectionError here as global error should be shown
     } finally {
       setExporting(false);
     }
-  };
-
-  // Placeholder function to update context state (needs proper implementation in context)
-  const setBudgetState = (updater: (prevState: typeof budgetState) => typeof budgetState) => {
-    // This should ideally call a dispatch or setState exposed by the context
-    console.error("Need a way to update BudgetContext state directly");
   };
 
   return (
@@ -321,7 +310,12 @@ const BudgetControl: React.FC = () => {
           </Select>
         </FormControl>
 
-        {/* Thai: แสดง Loading หรือ Error ทั่วไป */} 
+        {/* Thai: แสดง Loading หรือ Error ทั่วไป */}
+        {projectSelectionError && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {projectSelectionError}
+          </Alert>
+        )}
         {(budgetState.loadingProjects || budgetState.loadingTransactions) && (
           <CircularProgress sx={{ display: "block", margin: "auto", mb: 2 }} />
         )}
@@ -331,7 +325,7 @@ const BudgetControl: React.FC = () => {
           </Alert>
         )}
 
-        {/* Thai: ส่วนจัดการธุรกรรม (แสดงเมื่อเลือกโครงการแล้ว) */} 
+        {/* Thai: ส่วนจัดการธุรกรรม (แสดงเมื่อเลือกโครงการแล้ว) */}
         {budgetState.currentProject && (
           <Paper sx={{ p: 2 }}>
             <Grid
