@@ -144,14 +144,16 @@ const BudgetSummary: React.FC = () => {
                 </Paper>
             )}
 
-            {/* Potential for adding charts here using Recharts or similar */} 
-            {/* <Box sx={{ mt: 4 }}>
+            {/* Potential for adding charts here using Recharts or similar */}
+            {/*
+            <Box sx={{ mt: 4 }}>
                 <Typography variant="h6" gutterBottom>กราฟสรุป (ตัวอย่าง)</Typography>
                 <Paper sx={{ p: 2 }}>
                     <Typography color="text.secondary">กราฟแสดงสัดส่วนรายจ่าย หรือแนวโน้มงบประมาณ...</Typography>
-                    {/* Chart component would go here */}
+                    // Chart component would go here
                 </Paper>
-            </Box> */}
+            </Box>
+            */}
         </Box>
     );
 };
