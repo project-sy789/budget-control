@@ -1,0 +1,21 @@
+{
+    "name": "budget-control/v2",
+    "description": "Budget Control System v2 - PHP/MySQL with Bootstrap 5",
+    "type": "project",
+    "require": {
+        "php": ">=7.4",
+        "ext-pdo": "*",
+        "ext-pdo_mysql": "*",
+        "ext-json": "*",
+        "ext-session": "*",
+        "phpoffice/phpspreadsheet": "^4.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "BudgetControl\\": "src/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}
