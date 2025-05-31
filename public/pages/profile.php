@@ -217,8 +217,8 @@ if (!$currentUser) {
                     
                     <div class="mb-3">
                         <strong>สถานะบัญชี:</strong><br>
-                        <span class="badge bg-<?= $currentUser['is_active'] ? 'success' : 'danger' ?>">
-                            <?= $currentUser['is_active'] ? 'ใช้งานได้' : 'ถูกระงับ' ?>
+                        <span class="badge bg-<?= $currentUser['approved'] ? 'success' : 'danger' ?>">
+                            <?= $currentUser['approved'] ? 'ใช้งานได้' : 'รออนุมัติ' ?>
                         </span>
                     </div>
                     

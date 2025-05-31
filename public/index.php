@@ -7,10 +7,15 @@
 session_start();
 
 // Include required files
+require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../src/Auth/SessionManager.php';
 require_once __DIR__ . '/../src/Auth/AuthService.php';
 require_once __DIR__ . '/../src/Services/ProjectService.php';
 require_once __DIR__ . '/../src/Services/TransactionService.php';
+
+// Initialize database connection
+$database = new Database();
+$db = $database->getConnection();
 
 // Initialize services
 $sessionManager = new SessionManager();
@@ -162,6 +167,12 @@ if (rand(1, 100) === 1) {
                                 โอนงบประมาณ
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link <?= $page === 'category-management' ? 'active' : '' ?>" href="?page=category-management">
+                                <i class="bi bi-tags me-2"></i>
+                                จัดการหมวดหมู่
+                            </a>
+                        </li>
                         <?php if ($currentUser && $currentUser['role'] === 'admin'): ?>
                         <li class="nav-item">
                             <a class="nav-link <?= $page === 'user-management' ? 'active' : '' ?>" href="?page=user-management">
@@ -199,6 +210,7 @@ if (rand(1, 100) === 1) {
                             case 'budget-control': echo 'ควบคุมงบประมาณ'; break;
                             case 'budget-summary': echo 'สรุปงบประมาณ'; break;
                             case 'budget-transfer': echo 'โอนงบประมาณ'; break;
+                            case 'category-management': echo 'จัดการหมวดหมู่'; break;
                             case 'user-management': echo 'จัดการผู้ใช้'; break;
                             case 'profile': echo 'โปรไฟล์'; break;
                             default: echo 'ระบบควบคุมงบประมาณ';
@@ -231,6 +243,9 @@ if (rand(1, 100) === 1) {
                         case 'budget-transfer':
                             include 'pages/budget-transfer.php';
                             break;
+                        case 'category-management':
+                            include 'pages/category-management.php';
+                            break;
                         case 'user-management':
                             if ($currentUser && $currentUser['role'] === 'admin') {
                                 include 'pages/user-management.php';
@@ -254,6 +269,23 @@ if (rand(1, 100) === 1) {
     <?php include 'pages/login.php'; ?>
     <?php endif; ?>
     
+    <!-- Footer with Developer Credits -->
+    <footer class="bg-light border-top mt-5 py-3">
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col-12 text-center">
+                    <small class="text-muted">
+                        <i class="bi bi-code-slash me-1"></i>
+                        พัฒนาโดย <strong>นายณัฐรวี วิเศษสมบัติ</strong> 
+                        ตำแหน่ง ครูผู้ช่วย โรงเรียนซับใหญ่วิทยาคม
+                        <br>
+                        ระบบควบคุมการเบิกจ่ายโครงการ v2.0
+                    </small>
+                </div>
+            </div>
+        </div>
+    </footer>
+
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Chart.js for dashboard -->

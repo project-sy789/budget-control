@@ -4,7 +4,74 @@
  * Similar to WordPress installation process
  */
 
+// Configure session settings for installation
+ini_set('session.cookie_lifetime', 7200); // 2 hours
+ini_set('session.gc_maxlifetime', 7200);
+ini_set('session.gc_probability', 1);
+ini_set('session.gc_divisor', 100);
+
+// Try to set a writable session save path
+$sessionPath = sys_get_temp_dir();
+if (!is_writable($sessionPath)) {
+    // Try alternative paths for shared hosting
+    $altPaths = [
+        __DIR__ . '/tmp',
+        __DIR__ . '/sessions',
+        '/tmp'
+    ];
+    
+    foreach ($altPaths as $path) {
+        if (!file_exists($path)) {
+            @mkdir($path, 0755, true);
+        }
+        if (is_dir($path) && is_writable($path)) {
+            $sessionPath = $path;
+            break;
+        }
+    }
+}
+
+ini_set('session.save_path', $sessionPath);
+ini_set('session.use_strict_mode', 0); // Disable for compatibility
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_secure', isset($_SERVER['HTTPS']) ? 1 : 0);
+ini_set('session.use_only_cookies', 1);
+ini_set('session.cookie_samesite', 'Lax');
+
+// Set session name for installation
+session_name('BUDGET_INSTALL_SESSION');
+
 session_start();
+
+// Regenerate session ID for security and ensure session persistence
+if (!isset($_SESSION['install_session_started'])) {
+    session_regenerate_id(true);
+    $_SESSION['install_session_started'] = true;
+    $_SESSION['install_start_time'] = time();
+}
+
+// Debug session for installation
+if (isset($_GET['debug_session'])) {
+    echo '<pre style="background: #f0f0f0; padding: 20px; margin: 20px; border: 1px solid #ccc;">';
+    echo "=== SESSION DEBUG INFO ===\n";
+    echo "Session ID: " . session_id() . "\n";
+    echo "Session Name: " . session_name() . "\n";
+    echo "Session Status: " . session_status() . " (1=disabled, 2=active, 3=none)\n";
+    echo "Session Save Path: " . session_save_path() . "\n";
+    echo "Session Save Path Writable: " . (is_writable(session_save_path()) ? 'YES' : 'NO') . "\n";
+    echo "Current Step: " . ($_GET['step'] ?? 1) . "\n";
+    echo "\nSession Cookie Params:\n";
+    print_r(session_get_cookie_params());
+    echo "\nSession Data:\n";
+    print_r($_SESSION);
+    echo "\n=== SERVER INFO ===\n";
+    echo "PHP Version: " . PHP_VERSION . "\n";
+    echo "Server Software: " . ($_SERVER['SERVER_SOFTWARE'] ?? 'Unknown') . "\n";
+    echo "Document Root: " . ($_SERVER['DOCUMENT_ROOT'] ?? 'Unknown') . "\n";
+    echo '</pre>';
+    echo '<a href="install.php" style="display: inline-block; margin: 20px; padding: 10px 20px; background: #007cba; color: white; text-decoration: none; border-radius: 5px;">กลับไปติดตั้ง</a>';
+    exit;
+}
 
 // Check if already installed
 if (file_exists('config/database.php') && !isset($_GET['force'])) {
@@ -58,8 +125,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'port' => $dbPort
                     ];
                     
+                    // Force session write and close to ensure data is saved
+                    session_write_close();
+                    
+                    // Restart session for next request
+                    session_start();
+                    
+                    // Debug: Log session after setting db_config
+                    error_log("Step 2 - Session ID after setting db_config: " . session_id());
+                    error_log("Step 2 - Session data after setting: " . print_r($_SESSION, true));
+                    error_log("Step 2 - Session save path: " . session_save_path());
+                    
                     $success[] = 'การเชื่อมต่อฐานข้อมูลสำเร็จ!';
-                    $step = 3;
+                    
+                    // Add a small delay to ensure session is written
+                    usleep(100000); // 0.1 second
+                    
+                    header('Location: install.php?step=3');
+                    exit;
                     
                 } catch (PDOException $e) {
                     $errors[] = 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้: ' . $e->getMessage();
@@ -69,10 +152,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
         case 3:
             // Install database tables
+            // Debug: Log session state
+            error_log("Step 3 - Session ID: " . session_id());
+            error_log("Step 3 - Session name: " . session_name());
+            error_log("Step 3 - Session save path: " . session_save_path());
+            error_log("Step 3 - Session data: " . print_r($_SESSION, true));
+            error_log("Step 3 - Cookie params: " . print_r(session_get_cookie_params(), true));
+            
+            // Check if session is working properly
+            if (session_status() !== PHP_SESSION_ACTIVE) {
+                error_log("Step 3 - Session is not active, status: " . session_status());
+                $_SESSION['error_message'] = 'เกิดปัญหาเกี่ยวกับ Session กรุณาลองใหม่อีกครั้ง';
+                header('Location: install.php?step=2');
+                exit;
+            }
+            
             if (!isset($_SESSION['db_config'])) {
-                $errors[] = 'ไม่พบข้อมูลการเชื่อมต่อฐานข้อมูล กรุณาเริ่มต้นใหม่';
-                $step = 2;
+                error_log("Step 3 - db_config not found in session");
+                error_log("Step 3 - Available session keys: " . implode(', ', array_keys($_SESSION)));
+                $_SESSION['error_message'] = 'ข้อมูลการเชื่อมต่อฐานข้อมูลหายไป กรุณากรอกข้อมูลใหม่อีกครั้ง';
+                header('Location: install.php?step=2');
+                exit;
             } else {
+                error_log("Step 3 - db_config found: " . print_r($_SESSION['db_config'], true));
                 try {
                     $config = $_SESSION['db_config'];
                     $dsn = "mysql:host={$config['host']};port={$config['port']};dbname={$config['name']};charset=utf8mb4";
@@ -82,26 +184,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ]);
                     
                     // Read and execute SQL file
-                    $sqlFile = 'database/budget_control_v2.sql';
+                    $sqlFile = 'database/schema_mysql.sql';
                     if (!file_exists($sqlFile)) {
-                        $errors[] = 'ไม่พบไฟล์ SQL สำหรับสร้างฐานข้อมูล';
+                        $_SESSION['error_message'] = 'ไม่พบไฟล์ SQL สำหรับสร้างฐานข้อมูล';
+                        header('Location: install.php?step=2');
+                        exit;
                     } else {
                         $sql = file_get_contents($sqlFile);
+                        // Remove comments and split by semicolon
+                        $sql = preg_replace('/--.*$/m', '', $sql);
                         $statements = explode(';', $sql);
                         
                         foreach ($statements as $statement) {
                             $statement = trim($statement);
                             if (!empty($statement)) {
-                                $pdo->exec($statement);
+                                // Skip CREATE DATABASE and USE statements
+                                if (stripos($statement, 'CREATE DATABASE') === false && 
+                                    stripos($statement, 'USE ') === false) {
+                                    $pdo->exec($statement);
+                                }
                             }
                         }
                         
                         $success[] = 'สร้างตารางฐานข้อมูลสำเร็จ!';
-                        $step = 4;
+                        header('Location: install.php?step=4');
+                        exit;
                     }
                     
                 } catch (PDOException $e) {
-                    $errors[] = 'เกิดข้อผิดพลาดในการสร้างตารางฐานข้อมูล: ' . $e->getMessage();
+                    $_SESSION['error_message'] = 'เกิดข้อผิดพลาดในการสร้างตารางฐานข้อมูล: ' . $e->getMessage();
+                    header('Location: install.php?step=2');
+                    exit;
                 }
             }
             break;
@@ -139,14 +252,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         // Create admin user
                         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
                         $stmt = $pdo->prepare("
-                            INSERT INTO users (username, email, full_name, password_hash, role, is_approved, created_at) 
+                            INSERT INTO users (username, email, display_name, password_hash, role, approved, created_at) 
                             VALUES (?, ?, ?, ?, 'admin', 1, NOW())
                         ");
                         $stmt->execute([$username, $email, $fullName, $hashedPassword]);
                         
                         $_SESSION['admin_created'] = true;
                         $success[] = 'สร้างบัญชีผู้ดูแลระบบสำเร็จ!';
-                        $step = 5;
+                        header('Location: install.php?step=5');
+                        exit;
                     }
                     
                 } catch (PDOException $e) {
@@ -159,7 +273,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Create configuration files
             if (!isset($_SESSION['db_config']) || !isset($_SESSION['admin_created'])) {
                 $errors[] = 'ข้อมูลการติดตั้งไม่ครบถ้วน กรุณาเริ่มต้นใหม่';
-                $step = 1;
+                header('Location: install.php?step=1');
+                exit;
             } else {
                 try {
                     $config = $_SESSION['db_config'];
@@ -183,7 +298,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     unset($_SESSION['admin_created']);
                     
                     $success[] = 'การติดตั้งเสร็จสมบูรณ์!';
-                    $step = 6;
+                    header('Location: install.php?step=6');
+                    exit;
                     
                 } catch (Exception $e) {
                     $errors[] = 'เกิดข้อผิดพลาดในการสร้างไฟล์การตั้งค่า: ' . $e->getMessage();
@@ -336,7 +452,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endfor; ?>
                 </div>
                 
+                <!-- Debug Link -->
+                <div class="text-center mb-3">
+                    <a href="install.php?debug_session&step=<?= $step ?>" class="btn btn-sm btn-outline-secondary" target="_blank">
+                        <i class="bi bi-bug"></i> ตรวจสอบ Session Debug
+                    </a>
+                </div>
+                
                 <!-- Error Messages -->
+                <?php 
+                // Check for session error message
+                if (isset($_SESSION['error_message'])) {
+                    $errors[] = $_SESSION['error_message'];
+                    unset($_SESSION['error_message']);
+                }
+                ?>
                 <?php if (!empty($errors)): ?>
                     <div class="alert alert-danger">
                         <h6><i class="bi bi-exclamation-triangle-fill"></i> เกิดข้อผิดพลาด</h6>
@@ -467,27 +597,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                 <?php break; case 3: ?>
                     <!-- Database Installation -->
-                    <div class="text-center mb-4">
-                        <h2><i class="bi bi-gear-wide-connected text-primary"></i> สร้างตารางฐานข้อมูล</h2>
-                        <p class="text-muted">ระบบจะสร้างตารางที่จำเป็นในฐานข้อมูล</p>
-                    </div>
-                    
-                    <form method="POST">
-                        <div class="alert alert-info">
-                            <h6><i class="bi bi-info-circle-fill"></i> ข้อมูลการเชื่อมต่อ</h6>
-                            <p class="mb-0">
-                                <strong>เซิร์ฟเวอร์:</strong> <?= htmlspecialchars($_SESSION['db_config']['host'] ?? '') ?>:<?= htmlspecialchars($_SESSION['db_config']['port'] ?? '') ?><br>
-                                <strong>ฐานข้อมูล:</strong> <?= htmlspecialchars($_SESSION['db_config']['name'] ?? '') ?><br>
-                                <strong>ผู้ใช้:</strong> <?= htmlspecialchars($_SESSION['db_config']['user'] ?? '') ?>
-                            </p>
+                        <div class="text-center mb-4">
+                            <h2><i class="bi bi-gear-wide-connected text-primary"></i> สร้างตารางฐานข้อมูล</h2>
+                            <p class="text-muted">ระบบจะสร้างตารางที่จำเป็นในฐานข้อมูล</p>
                         </div>
                         
-                        <div class="text-center">
-                            <button type="submit" class="btn btn-primary btn-lg">
-                                <i class="bi bi-database-add"></i> สร้างตารางฐานข้อมูล
-                            </button>
-                        </div>
-                    </form>
+                        <form method="POST">
+                            <div class="alert alert-info">
+                                <h6><i class="bi bi-info-circle-fill"></i> ข้อมูลการเชื่อมต่อ</h6>
+                                <p class="mb-0">
+                                    <strong>เซิร์ฟเวอร์:</strong> <?= htmlspecialchars($_SESSION['db_config']['host'] ?? '') ?>:<?= htmlspecialchars($_SESSION['db_config']['port'] ?? '') ?><br>
+                                    <strong>ฐานข้อมูล:</strong> <?= htmlspecialchars($_SESSION['db_config']['name'] ?? '') ?><br>
+                                    <strong>ผู้ใช้:</strong> <?= htmlspecialchars($_SESSION['db_config']['user'] ?? '') ?>
+                                </p>
+                            </div>
+                            
+                            <div class="text-center">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="bi bi-database-add"></i> สร้างตารางฐานข้อมูล
+                                </button>
+                            </div>
+                        </form>
                     
                 <?php break; case 4: ?>
                     <!-- Admin User Creation -->

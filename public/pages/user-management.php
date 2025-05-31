@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 'create_user':
             $username = trim($_POST['username']);
             $email = trim($_POST['email']);
-            $fullName = trim($_POST['full_name']);
+            $displayName = trim($_POST['full_name']);
             $role = $_POST['role'];
             $password = $_POST['password'];
             $confirmPassword = $_POST['confirm_password'];
@@ -33,12 +33,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $messageType = 'danger';
             } else {
                 try {
-                    $result = $authService->registerUser($username, $email, $password, $fullName, $role);
-                    if ($result) {
-                        $message = 'สร้างผู้ใช้สำเร็จ';
+                    $userData = [
+                        'username' => $username,
+                        'email' => $email,
+                        'password' => $password,
+                        'display_name' => $displayName,
+                        'department' => '',
+                        'position' => '',
+                        'role' => $role,
+                        'approved' => 1
+                    ];
+                    $result = $authService->register($userData);
+                    if ($result['success']) {
+                        $message = $result['message'];
                         $messageType = 'success';
                     } else {
-                        $message = 'ชื่อผู้ใช้หรืออีเมลนี้มีอยู่แล้ว';
+                        $message = $result['message'];
                         $messageType = 'danger';
                     }
                 } catch (Exception $e) {
@@ -51,18 +61,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 'update_user':
             $userId = intval($_POST['user_id']);
             $email = trim($_POST['email']);
-            $fullName = trim($_POST['full_name']);
+            $displayName = trim($_POST['full_name']);
             $role = $_POST['role'];
-            $isApproved = isset($_POST['is_approved']) ? 1 : 0;
+            $approved = isset($_POST['is_approved']) ? 1 : 0;
             
             try {
-                $result = $authService->updateUserRole($userId, $role);
-                if ($result) {
-                    // Update additional fields (you may need to add this method to AuthService)
-                    $message = 'อัปเดตผู้ใช้สำเร็จ';
+                $result = $authService->updateUserStatus($userId, $role, $approved);
+                if ($result['success']) {
+                    $message = $result['message'];
                     $messageType = 'success';
                 } else {
-                    $message = 'ไม่สามารถอัปเดตผู้ใช้ได้';
+                    $message = $result['message'];
                     $messageType = 'danger';
                 }
             } catch (Exception $e) {
@@ -206,7 +215,7 @@ $roles = [
                                     <span class="badge bg-info ms-1">คุณ</span>
                                     <?php endif; ?>
                                 </td>
-                                <td><?= htmlspecialchars($user['full_name']) ?></td>
+                                <td><?= htmlspecialchars($user['display_name']) ?></td>
                                 <td><?= htmlspecialchars($user['email']) ?></td>
                                 <td>
                                     <span class="badge bg-<?= $user['role'] === 'admin' ? 'danger' : ($user['role'] === 'manager' ? 'warning' : 'secondary') ?>">
@@ -214,7 +223,7 @@ $roles = [
                                     </span>
                                 </td>
                                 <td>
-                                    <?php if ($user['is_approved']): ?>
+                                    <?php if ($user['approved']): ?>
                                     <span class="badge bg-success">อนุมัติ</span>
                                     <?php else: ?>
                                     <span class="badge bg-warning">รออนุมัติ</span>
@@ -357,9 +366,9 @@ function editUser(user) {
     document.getElementById('edit_user_id').value = user.id;
     document.getElementById('edit_username').value = user.username;
     document.getElementById('edit_email').value = user.email;
-    document.getElementById('edit_full_name').value = user.full_name;
+    document.getElementById('edit_full_name').value = user.display_name;
     document.getElementById('edit_role').value = user.role;
-    document.getElementById('edit_is_approved').checked = user.is_approved == 1;
+    document.getElementById('edit_is_approved').checked = user.approved == 1;
     
     new bootstrap.Modal(document.getElementById('editUserModal')).show();
 }

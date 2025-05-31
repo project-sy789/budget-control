@@ -26,6 +26,10 @@ $projects = $projectService->getAllProjects();
 $transactionStats = $transactionService->getTransactionSummary($filters);
 $projectSummary = $projectService->getProjectSummary();
 
+// Get dynamic budget categories from CategoryService
+require_once '../src/Services/CategoryService.php';
+$categoryService = new CategoryService($db);
+
 // Filter projects by work group if specified
 if (!empty($workGroupFilter)) {
     $projects = array_filter($projects, function($project) use ($workGroupFilter) {
@@ -64,8 +68,8 @@ foreach ($projects as $project) {
     $categories = $projectService->getProjectBudgetCategories($project['id']);
     foreach ($categories as $category) {
         $remainingBalance = $transactionService->getProjectCategoryBalance($project['id'], $category['category']);
-        $categoryName = $category['category']; // Use category enum value as name
-        $usedAmount = $category['amount'] - $remainingBalance;
+        $categoryName = $category['category_name']; // Use category name for display
+        $usedAmount = isset($category['amount']) ? $category['amount'] - $remainingBalance : 0;
         
         if (!isset($budgetByCategory[$categoryName])) {
             $budgetByCategory[$categoryName] = [
@@ -74,7 +78,7 @@ foreach ($projects as $project) {
                 'remaining' => 0
             ];
         }
-        $budgetByCategory[$categoryName]['budget'] += $category['amount'];
+        $budgetByCategory[$categoryName]['budget'] += isset($category['amount']) ? $category['amount'] : 0;
         $budgetByCategory[$categoryName]['used'] += $usedAmount;
         $budgetByCategory[$categoryName]['remaining'] += $remainingBalance;
     }
@@ -89,8 +93,15 @@ $workGroups = [
     'budget' => 'งานงบประมาณ',
     'hr' => 'งานบุคลากร',
     'general' => 'งานทั่วไป',
-    'other' => 'อื่นๆ'
+    'other' => 'อื่น ๆ'
 ];
+
+// Get dynamic budget categories from CategoryService
+$budgetCategoriesData = $categoryService->getAllActiveCategories();
+$budgetCategories = [];
+foreach ($budgetCategoriesData as $category) {
+    $budgetCategories[$category['category_key']] = $category['category_name'];
+}
 ?>
 
 <!-- Filters -->
@@ -351,9 +362,10 @@ $workGroups = [
                         <tbody>
                             <?php foreach ($budgetByCategory as $categoryName => $data): 
                                 $usagePercent = $data['budget'] > 0 ? ($data['used'] / $data['budget']) * 100 : 0;
+                                $displayName = $budgetCategories[$categoryName] ?? $categoryName;
                             ?>
                             <tr>
-                                <td><?= htmlspecialchars($categoryName) ?></td>
+                                <td><?= htmlspecialchars($displayName) ?></td>
                                 <td>฿<?= number_format($data['budget'], 2) ?></td>
                                 <td>
                                     <span class="text-danger">฿<?= number_format($data['used'], 2) ?></span>

@@ -3,6 +3,15 @@
  * Budget Control Page - Transaction Management
  */
 
+// Handle AJAX request for getting budget categories
+if (isset($_GET['get_categories']) && isset($_GET['project_id'])) {
+    header('Content-Type: application/json');
+    $projectId = intval($_GET['project_id']);
+    $categories = $projectService->getProjectBudgetCategories($projectId);
+    echo json_encode($categories);
+    exit;
+}
+
 $error = '';
 $success = '';
 $editTransaction = null;
@@ -99,6 +108,15 @@ $totalPages = ceil($totalTransactions / $perPage);
 
 // Get projects for dropdown
 $projects = $projectService->getAllProjects();
+
+// Get dynamic budget categories from CategoryService
+require_once '../src/Services/CategoryService.php';
+$categoryService = new CategoryService($db);
+$budgetCategoriesData = $categoryService->getAllActiveCategories();
+$budgetCategories = [];
+foreach ($budgetCategoriesData as $category) {
+    $budgetCategories[$category['category_key']] = $category['category_name'];
+}
 ?>
 
 <!-- Alert Messages -->
@@ -422,6 +440,9 @@ $projects = $projectService->getAllProjects();
 </div>
 
 <script>
+// Budget Categories mapping from PHP
+const budgetCategories = <?= json_encode($budgetCategories) ?>;
+
 // Load categories when project is selected
 document.getElementById('project_id').addEventListener('change', function() {
     const projectId = this.value;
@@ -432,13 +453,14 @@ document.getElementById('project_id').addEventListener('change', function() {
     
     if (projectId) {
         // Fetch categories for selected project
-        fetch(`?page=budget-control&get_categories=1&project_id=${projectId}`)
+        fetch(`?get_categories=1&project_id=${projectId}`)
             .then(response => response.json())
             .then(categories => {
                 categories.forEach(category => {
                     const option = document.createElement('option');
                     option.value = category.id;
-                    option.textContent = category.category;
+                    // Use category_name for display
+                    option.textContent = category.category_name || category.category;
                     categorySelect.appendChild(option);
                 });
             })

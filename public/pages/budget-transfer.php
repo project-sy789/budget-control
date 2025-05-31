@@ -49,51 +49,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 // Get projects for dropdown
 $projects = $projectService->getAllProjects(null, 'active');
 
-// Get budget category types from database schema
-function getBudgetCategoryTypes($projectService) {
-    try {
-        // Use reflection to access the private connection from ProjectService
-        $reflection = new ReflectionClass($projectService);
-        $connProperty = $reflection->getProperty('conn');
-        $connProperty->setAccessible(true);
-        $conn = $connProperty->getValue($projectService);
-        
-        $query = "SHOW COLUMNS FROM budget_categories LIKE 'category'";
-        $stmt = $conn->prepare($query);
-        $stmt->execute();
-        $result = $stmt->fetch();
-        
-        if ($result && isset($result['Type'])) {
-            // Extract ENUM values from Type column
-            preg_match('/enum\((.+)\)/i', $result['Type'], $matches);
-            if (isset($matches[1])) {
-                $enumValues = str_getcsv($matches[1], ',', "'");
-                return $enumValues;
-            }
-        }
-        return [];
-    } catch (Exception $e) {
-        error_log("Get budget category types error: " . $e->getMessage());
-        return [];
-    }
+// Get dynamic budget categories from CategoryService
+require_once '../src/Services/CategoryService.php';
+$categoryService = new CategoryService($db);
+$budgetCategoriesData = $categoryService->getAllActiveCategories();
+$availableCategoryTypes = [];
+foreach ($budgetCategoriesData as $category) {
+    $availableCategoryTypes[] = $category['category_key'];
 }
-
-// Get available category types from database
-$availableCategoryTypes = getBudgetCategoryTypes($projectService);
-
-// Define budget categories mapping for display
-$budgetCategoryNames = [
-    'SUBSIDY' => 'เงินอุดหนุน',
-    'DEVELOPMENT' => 'ค่าพัฒนา',
-    'INCOME' => 'รายได้',
-    'EQUIPMENT' => 'ครุภัณฑ์',
-    'UNIFORM' => 'เครื่องแบบ',
-    'BOOKS' => 'หนังสือ',
-    'LUNCH' => 'อาหารกลางวัน'
-];
-
-// Filter category names to only include available types
-$budgetCategoryNames = array_intersect_key($budgetCategoryNames, array_flip($availableCategoryTypes));
 
 // Get all project categories for AJAX
 $projectCategories = [];
@@ -372,16 +335,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const transferSummary = document.getElementById('transferSummary');
     const form = document.getElementById('transferForm');
     
-    // Budget category names mapping
-    const categoryNames = {
-        'SUBSIDY': 'เงินอุดหนุน',
-        'DEVELOPMENT': 'ค่าพัฒนา',
-        'INCOME': 'รายได้',
-        'EQUIPMENT': 'ครุภัณฑ์',
-        'UNIFORM': 'เครื่องแบบ',
-        'BOOKS': 'หนังสือ',
-        'LUNCH': 'อาหารกลางวัน'
-    };
+    // No hardcoded category names - use dynamic categories from database
     
     // Project categories data from PHP
     const projectCategories = <?= json_encode($projectCategories) ?>;
@@ -402,8 +356,8 @@ document.addEventListener('DOMContentLoaded', function() {
         categories.forEach(category => {
             const option = document.createElement('option');
             option.value = category.category;
-            option.textContent = `${categoryNames[category.category] || category.category} (฿${parseFloat(category.amount).toLocaleString()})`;
-            option.dataset.amount = category.amount;
+            option.textContent = `${category.category_name} (฿${parseFloat(category.amount || 0).toLocaleString()})`;
+            option.dataset.amount = category.amount || 0;
             categorySelect.appendChild(option);
         });
         
@@ -433,11 +387,16 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (matchingCategory) {
             // If category exists in destination project, show its current amount
-            option.textContent = `${categoryNames[selectedCategory] || selectedCategory} (฿${parseFloat(matchingCategory.amount).toLocaleString()})`;
-            option.dataset.amount = matchingCategory.amount;
+            option.textContent = `${matchingCategory.category_name} (฿${parseFloat(matchingCategory.amount || 0).toLocaleString()})`;
+            option.dataset.amount = matchingCategory.amount || 0;
         } else {
             // If category doesn't exist in destination project, show as new category
-            option.textContent = `${categoryNames[selectedCategory] || selectedCategory} (หมวดหมู่ใหม่)`;
+            // Find the category name from source project
+            const fromProjectId = fromProjectSelect.value;
+            const fromCategories = projectCategories[fromProjectId];
+            const sourceCategory = fromCategories.find(cat => cat.category === selectedCategory);
+            const categoryName = sourceCategory ? sourceCategory.category_name : selectedCategory;
+            option.textContent = `${categoryName} (หมวดหมู่ใหม่)`;
             option.dataset.amount = 0;
         }
         
@@ -508,8 +467,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             document.getElementById('summaryFromProject').textContent = fromOption.dataset.name;
             document.getElementById('summaryToProject').textContent = toOption.dataset.name;
-            document.getElementById('summaryFromCategory').textContent = categoryNames[fromCategory] || fromCategory;
-            document.getElementById('summaryToCategory').textContent = categoryNames[toCategory] || toCategory;
+            document.getElementById('summaryFromCategory').textContent = fromCategory;
+            document.getElementById('summaryToCategory').textContent = toCategory;
             document.getElementById('summaryFromBudget').textContent = `฿${fromBudget.toLocaleString()}`;
             document.getElementById('summaryToBudget').textContent = `฿${toBudget.toLocaleString()}`;
             document.getElementById('summaryFromAfter').textContent = `฿${(fromBudget - amount).toLocaleString()}`;

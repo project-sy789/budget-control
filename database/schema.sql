@@ -40,16 +40,32 @@ CREATE TABLE projects (
     INDEX idx_dates (start_date, end_date)
 );
 
+-- Category types for dynamic budget categories
+CREATE TABLE category_types (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    category_key VARCHAR(50) UNIQUE NOT NULL,
+    category_name VARCHAR(100) NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_category_active (is_active),
+    INDEX idx_category_key (category_key)
+);
+
 -- Budget categories for projects
 CREATE TABLE budget_categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     project_id INT NOT NULL,
-    category ENUM('SUBSIDY', 'DEVELOPMENT', 'INCOME', 'EQUIPMENT', 'UNIFORM', 'BOOKS', 'LUNCH') NOT NULL,
+    category VARCHAR(100) NOT NULL,
     amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
     description VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (category) REFERENCES category_types(category_key) ON DELETE RESTRICT,
     UNIQUE KEY unique_project_category (project_id, category),
     INDEX idx_category (category)
 );
@@ -61,14 +77,14 @@ CREATE TABLE transactions (
     date DATE NOT NULL,
     description VARCHAR(255) NOT NULL,
     amount DECIMAL(15,2) NOT NULL,
-    budget_category ENUM('SUBSIDY', 'DEVELOPMENT', 'INCOME', 'EQUIPMENT', 'UNIFORM', 'BOOKS', 'LUNCH') NOT NULL,
+    budget_category VARCHAR(100) NOT NULL,
     note TEXT,
     is_transfer BOOLEAN DEFAULT FALSE,
     is_transfer_in BOOLEAN DEFAULT FALSE,
     transfer_to_project_id INT NULL,
-    transfer_to_category ENUM('SUBSIDY', 'DEVELOPMENT', 'INCOME', 'EQUIPMENT', 'UNIFORM', 'BOOKS', 'LUNCH') NULL,
+    transfer_to_category VARCHAR(100) NULL,
     transfer_from_project_id INT NULL,
-    transfer_from_category ENUM('SUBSIDY', 'DEVELOPMENT', 'INCOME', 'EQUIPMENT', 'UNIFORM', 'BOOKS', 'LUNCH') NULL,
+    transfer_from_category VARCHAR(100) NULL,
     created_by INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -93,28 +109,18 @@ CREATE TABLE user_sessions (
     INDEX idx_user_expires (user_id, expires_at)
 );
 
--- Insert default admin user (password: admin123)
-INSERT INTO users (username, email, password_hash, display_name, role, approved, department, position) 
-VALUES (
-    'admin', 
-    'admin@budgetcontrol.local', 
-    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', -- password: admin123
-    'ผู้ดูแลระบบ', 
-    'admin', 
-    TRUE, 
-    'กลุ่มงานงบประมาณ', 
-    'ผู้ดูแลระบบ'
-);
+-- Insert default category types
+INSERT INTO category_types (category_key, category_name, description, is_active) VALUES
+('BOOKS', 'ค่าหนังสือและเอกสาร', 'ค่าใช้จ่ายสำหรับหนังสือ เอกสาร และสื่อการเรียนการสอน', 1),
+('EQUIPMENT', 'ค่าครุภัณฑ์และอุปกรณ์', 'ค่าใช้จ่ายสำหรับครุภัณฑ์ อุปกรณ์ และเครื่องมือต่างๆ', 1),
+('DEVELOPMENT', 'ค่าพัฒนาและก่อสร้าง', 'ค่าใช้จ่ายสำหรับการพัฒนาและก่อสร้างโครงการ', 1),
+('LUNCH', 'ค่าอาหารและเครื่องดื่ม', 'ค่าใช้จ่ายสำหรับอาหาร เครื่องดื่ม และการเลี้ยงรับรอง', 1),
+('SUBSIDY', 'ค่าใช้จ่ายอื่นๆ', 'ค่าใช้จ่ายเบ็ดเตล็ดและค่าใช้จ่ายที่ไม่อยู่ในหมวดอื่น', 1),
+('UNIFORM', 'ค่าเครื่องแบบและเครื่องแต่งกาย', 'ค่าใช้จ่ายสำหรับเครื่องแบบ เครื่องแต่งกาย และอุปกรณ์แต่งตัว', 1),
+('TRAINING', 'ค่าฝึกอบรมและสัมมนา', 'ค่าใช้จ่ายสำหรับการฝึกอบรม สัมมนา และพัฒนาบุคลากร', 1),
+('MATERIAL', 'ค่าวัสดุสำนักงาน', 'ค่าใช้จ่ายสำหรับวัสดุสำนักงานและอุปกรณ์การทำงาน', 1),
+('TRANSPORT', 'ค่าเดินทางและขนส่ง', 'ค่าใช้จ่ายสำหรับการเดินทาง ขนส่ง และค่าพาหนะ', 1),
+('UTILITY', 'ค่าสาธารณูปโภค', 'ค่าใช้จ่ายสำหรับไฟฟ้า น้ำประปา โทรศัพท์ และสาธารณูปโภคอื่นๆ', 1);
 
--- Insert sample user (password: user123)
-INSERT INTO users (username, email, password_hash, display_name, role, approved, department, position) 
-VALUES (
-    'user1', 
-    'user1@budgetcontrol.local', 
-    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', -- password: user123
-    'ผู้ใช้ทดสอบ', 
-    'user', 
-    TRUE, 
-    'กลุ่มงานบริหารวิชาการ', 
-    'เจ้าหน้าที่'
-);
+-- Default users will be created during installation process
+-- No pre-inserted users in schema to avoid conflicts during installation

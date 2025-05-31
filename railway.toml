@@ -1,0 +1,17 @@
+[build]
+builder = "nixpacks"
+buildCommand = "composer install --no-dev --optimize-autoloader && mkdir -p public/uploads && chmod 755 public/uploads"
+
+[deploy]
+startCommand = "php -S 0.0.0.0:$PORT -t public"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[environments.production.variables]
+PHP_VERSION = "8.1"
+APP_ENV = "production"
+DB_PORT = "3306"
+
+[environments.production.plugins]
+[environments.production.plugins.mysql]
+type = "mysql"

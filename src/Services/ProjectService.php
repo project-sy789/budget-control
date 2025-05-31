@@ -92,6 +92,20 @@ class ProjectService {
             
             if ($project) {
                 $project['budget_categories'] = $this->getProjectBudgetCategories($projectId);
+                
+                // Calculate total budget from budget categories
+                $totalBudget = 0;
+                foreach ($project['budget_categories'] as $category) {
+                    $totalBudget += $category['amount'];
+                }
+                $project['total_budget'] = $totalBudget;
+                
+                // Calculate used budget from transactions
+                $usedBudget = $this->getProjectUsedBudget($projectId);
+                $project['used_budget'] = $usedBudget;
+                
+                // Calculate remaining budget
+                $project['remaining_budget'] = $totalBudget - $usedBudget;
             }
             
             return $project;
@@ -112,9 +126,16 @@ class ProjectService {
             $query = "INSERT INTO projects (name, budget, work_group, responsible_person, description, start_date, end_date, status, created_by) 
                      VALUES (:name, :budget, :work_group, :responsible_person, :description, :start_date, :end_date, :status, :created_by)";
             
+            // Debug: Log the budget value being inserted
+            error_log("ProjectService DEBUG - Budget value type: " . gettype($projectData['budget']));
+            error_log("ProjectService DEBUG - Budget value: " . var_export($projectData['budget'], true));
+            error_log("ProjectService DEBUG - Budget as float: " . floatval($projectData['budget']));
+            
             $stmt = $this->conn->prepare($query);
             $stmt->bindParam(':name', $projectData['name']);
-            $stmt->bindParam(':budget', $projectData['budget']);
+            // Ensure budget is properly cast to float
+            $budgetValue = floatval($projectData['budget']);
+            $stmt->bindParam(':budget', $budgetValue);
             $stmt->bindParam(':work_group', $projectData['work_group']);
             $stmt->bindParam(':responsible_person', $projectData['responsible_person']);
             $stmt->bindParam(':description', $projectData['description']);
@@ -122,6 +143,8 @@ class ProjectService {
             $stmt->bindParam(':end_date', $projectData['end_date']);
             $stmt->bindParam(':status', $projectData['status']);
             $stmt->bindParam(':created_by', $createdBy);
+            
+            error_log("ProjectService DEBUG - About to execute INSERT with budget: " . $budgetValue);
             
             if (!$stmt->execute()) {
                 throw new Exception('ไม่สามารถสร้างโครงการได้');
@@ -189,15 +212,47 @@ class ProjectService {
             
             // Update budget categories if provided
             if (isset($projectData['budget_categories']) && is_array($projectData['budget_categories'])) {
-                // Delete existing categories
-                $deleteQuery = "DELETE FROM budget_categories WHERE project_id = :project_id";
+                // First, delete all existing budget categories for this project
+                // (only those without transactions to prevent data loss)
+                $deleteQuery = "DELETE bc FROM budget_categories bc 
+                               LEFT JOIN transactions t ON bc.project_id = t.project_id AND bc.category_type_id = t.category_type_id 
+                               WHERE bc.project_id = :project_id AND t.id IS NULL";
                 $deleteStmt = $this->conn->prepare($deleteQuery);
                 $deleteStmt->bindParam(':project_id', $projectId);
                 $deleteStmt->execute();
                 
-                // Insert new categories
+                // Insert or update budget categories using ON DUPLICATE KEY UPDATE
                 foreach ($projectData['budget_categories'] as $category) {
-                    $this->addBudgetCategory($projectId, $category);
+                    $categoryKey = $category['category'];
+                    $amount = floatval($category['amount']);
+                    
+                    // Get category_type_id from category_key
+                    $categoryQuery = "SELECT id FROM category_types WHERE category_key = :category_key";
+                    $categoryStmt = $this->conn->prepare($categoryQuery);
+                    $categoryStmt->bindParam(':category_key', $categoryKey);
+                    $categoryStmt->execute();
+                    $categoryResult = $categoryStmt->fetch();
+                    
+                    if (!$categoryResult) {
+                        throw new Exception('ไม่พบหมวดหมู่งบประมาณ: ' . $categoryKey);
+                    }
+                    
+                    $categoryTypeId = $categoryResult['id'];
+                    
+                    // Use INSERT ... ON DUPLICATE KEY UPDATE to handle both new and existing categories
+                    $upsertQuery = "INSERT INTO budget_categories (project_id, category_type_id, budget_amount) 
+                                   VALUES (:project_id, :category_type_id, :budget_amount)
+                                   ON DUPLICATE KEY UPDATE 
+                                   budget_amount = VALUES(budget_amount)";
+                    
+                    $upsertStmt = $this->conn->prepare($upsertQuery);
+                    $upsertStmt->bindParam(':project_id', $projectId);
+                    $upsertStmt->bindParam(':category_type_id', $categoryTypeId);
+                    $upsertStmt->bindParam(':budget_amount', $amount);
+                    
+                    if (!$upsertStmt->execute()) {
+                        throw new Exception('ไม่สามารถอัปเดตหมวดหมู่งบประมาณได้: ' . $categoryKey);
+                    }
                 }
             }
             
@@ -266,12 +321,48 @@ class ProjectService {
      */
     public function getProjectBudgetCategories($projectId) {
         try {
-            $query = "SELECT * FROM budget_categories WHERE project_id = :project_id ORDER BY category";
+            // Get project-specific budget categories with amounts
+            $query = "SELECT bc.*, ct.category_key, ct.category_name 
+                     FROM budget_categories bc 
+                     LEFT JOIN category_types ct ON bc.category_type_id = ct.id 
+                     WHERE bc.project_id = :project_id 
+                     ORDER BY ct.category_key";
+            
             $stmt = $this->conn->prepare($query);
             $stmt->bindParam(':project_id', $projectId);
             $stmt->execute();
+            $projectCategories = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
-            return $stmt->fetchAll();
+            // If no project-specific categories, get all active categories with 0 amounts
+            if (empty($projectCategories)) {
+                require_once __DIR__ . '/CategoryService.php';
+                $categoryService = new CategoryService($this->conn);
+                $allCategories = $categoryService->getAllActiveCategories();
+                
+                $formattedCategories = [];
+                foreach ($allCategories as $category) {
+                    $formattedCategories[] = [
+                        'id' => $category['id'],
+                        'category' => $category['category_key'],
+                        'category_name' => $category['category_name'],
+                        'amount' => 0
+                    ];
+                }
+                return $formattedCategories;
+            }
+            
+            // Format project categories for JavaScript consumption
+            $formattedCategories = [];
+            foreach ($projectCategories as $category) {
+                $formattedCategories[] = [
+                    'id' => $category['id'],
+                    'category' => $category['category_key'],
+                    'category_name' => $category['category_name'] ?: $category['category_key'],
+                    'amount' => floatval($category['budget_amount']) ?: 0
+                ];
+            }
+            
+            return $formattedCategories;
         } catch (Exception $e) {
             error_log("Get project budget categories error: " . $e->getMessage());
             return [];
@@ -283,14 +374,26 @@ class ProjectService {
      */
     private function addBudgetCategory($projectId, $categoryData) {
         try {
-            $query = "INSERT INTO budget_categories (project_id, category, amount, description) 
-                     VALUES (:project_id, :category, :amount, :description)";
+            // First, get the category_type_id from category_key
+            $categoryQuery = "SELECT id FROM category_types WHERE category_key = :category_key";
+            $categoryStmt = $this->conn->prepare($categoryQuery);
+            $categoryStmt->bindParam(':category_key', $categoryData['category']);
+            $categoryStmt->execute();
+            $categoryResult = $categoryStmt->fetch();
+            
+            if (!$categoryResult) {
+                throw new Exception('ไม่พบหมวดหมู่งบประมาณ: ' . $categoryData['category']);
+            }
+            
+            $categoryTypeId = $categoryResult['id'];
+            
+            $query = "INSERT INTO budget_categories (project_id, category_type_id, budget_amount) 
+                     VALUES (:project_id, :category_type_id, :budget_amount)";
             
             $stmt = $this->conn->prepare($query);
             $stmt->bindParam(':project_id', $projectId);
-            $stmt->bindParam(':category', $categoryData['category']);
-            $stmt->bindParam(':amount', $categoryData['amount']);
-            $stmt->bindParam(':description', $categoryData['description']);
+            $stmt->bindParam(':category_type_id', $categoryTypeId);
+            $stmt->bindParam(':budget_amount', $categoryData['amount']);
             
             return $stmt->execute();
         } catch (Exception $e) {
@@ -305,14 +408,15 @@ class ProjectService {
     public function getProjectBalance($projectId) {
         try {
             $query = "SELECT 
-                        bc.category,
-                        bc.amount as budget_amount,
+                        ct.category_key as category,
+                        bc.budget_amount,
                         COALESCE(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END), 0) as spent_amount,
-                        (bc.amount - COALESCE(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END), 0)) as remaining_amount
+                        (bc.budget_amount - COALESCE(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END), 0)) as remaining_amount
                      FROM budget_categories bc
-                     LEFT JOIN transactions t ON bc.project_id = t.project_id AND bc.category = t.budget_category
+                     JOIN category_types ct ON bc.category_type_id = ct.id
+                     LEFT JOIN transactions t ON bc.project_id = t.project_id AND bc.category_type_id = t.category_type_id
                      WHERE bc.project_id = :project_id
-                     GROUP BY bc.category, bc.amount";
+                     GROUP BY ct.category_key, bc.budget_amount";
             
             $stmt = $this->conn->prepare($query);
             $stmt->bindParam(':project_id', $projectId);
