@@ -52,19 +52,43 @@ class ProjectService {
             foreach ($projects as &$project) {
                 $project['budget_categories'] = $this->getProjectBudgetCategories($project['id']);
                 
-                // Calculate total budget from budget categories
-                $totalBudget = 0;
+                // Calculate initial total budget from budget categories using initial_amount
+                $initialTotalBudget = 0;
                 foreach ($project['budget_categories'] as $category) {
-                    $totalBudget += $category['amount'];
+                    // Use initial_amount for total budget calculation, not the remaining amount
+                    $initialTotalBudget += $category['initial_amount'];
                 }
-                $project['total_budget'] = $totalBudget;
                 
-                // Calculate used budget from transactions
+                // Include TransactionService for transfer calculation
+                require_once __DIR__ . '/TransactionService.php';
+                $transactionService = new TransactionService();
+                
+                // Calculate net transfers for this project
+                // Note: transfer_out amounts are stored as negative values in DB
+                $transferQuery = "SELECT 
+                    COALESCE(SUM(CASE WHEN transaction_type = 'transfer_in' THEN amount ELSE 0 END), 0) as transfer_in,
+                    COALESCE(SUM(CASE WHEN transaction_type = 'transfer_out' THEN amount ELSE 0 END), 0) as transfer_out
+                    FROM transactions WHERE project_id = :project_id";
+                
+                $transferStmt = $this->conn->prepare($transferQuery);
+                $transferStmt->bindParam(':project_id', $project['id']);
+                $transferStmt->execute();
+                $transferResult = $transferStmt->fetch(PDO::FETCH_ASSOC);
+                
+                $transferIn = floatval($transferResult['transfer_in']);
+                $transferOut = floatval($transferResult['transfer_out']); // Already negative
+                $netTransfer = $transferIn + $transferOut; // Add because transfer_out is already negative
+                
+                // Calculate actual total budget including net transfers
+                $actualTotalBudget = $initialTotalBudget + $netTransfer;
+                $project['total_budget'] = $actualTotalBudget;
+                
+                // Calculate used budget from transactions (expenses only)
                 $usedBudget = $this->getProjectUsedBudget($project['id']);
                 $project['used_budget'] = $usedBudget;
                 
                 // Calculate remaining budget
-                $project['remaining_budget'] = $totalBudget - $usedBudget;
+                $project['remaining_budget'] = $actualTotalBudget - $usedBudget;
             }
             
             return $projects;
@@ -93,19 +117,42 @@ class ProjectService {
             if ($project) {
                 $project['budget_categories'] = $this->getProjectBudgetCategories($projectId);
                 
-                // Calculate total budget from budget categories
-                $totalBudget = 0;
+                // Calculate initial total budget from budget categories
+                $initialTotalBudget = 0;
                 foreach ($project['budget_categories'] as $category) {
-                    $totalBudget += $category['amount'];
+                    $initialTotalBudget += $category['initial_amount'];
                 }
-                $project['total_budget'] = $totalBudget;
                 
-                // Calculate used budget from transactions
+                // Include TransactionService for transfer calculation
+                require_once __DIR__ . '/TransactionService.php';
+                $transactionService = new TransactionService();
+                
+                // Calculate net transfers for this project
+                // Note: transfer_out amounts are stored as negative values in DB
+                $transferQuery = "SELECT 
+                    COALESCE(SUM(CASE WHEN transaction_type = 'transfer_in' THEN amount ELSE 0 END), 0) as transfer_in,
+                    COALESCE(SUM(CASE WHEN transaction_type = 'transfer_out' THEN amount ELSE 0 END), 0) as transfer_out
+                    FROM transactions WHERE project_id = :project_id";
+                
+                $transferStmt = $this->conn->prepare($transferQuery);
+                $transferStmt->bindParam(':project_id', $projectId);
+                $transferStmt->execute();
+                $transferResult = $transferStmt->fetch(PDO::FETCH_ASSOC);
+                
+                $transferIn = floatval($transferResult['transfer_in']);
+                $transferOut = floatval($transferResult['transfer_out']); // Already negative
+                $netTransfer = $transferIn + $transferOut; // Add because transfer_out is already negative
+                
+                // Calculate actual total budget including net transfers
+                $actualTotalBudget = $initialTotalBudget + $netTransfer;
+                $project['total_budget'] = $actualTotalBudget;
+                
+                // Calculate used budget from transactions (expenses only)
                 $usedBudget = $this->getProjectUsedBudget($projectId);
                 $project['used_budget'] = $usedBudget;
                 
                 // Calculate remaining budget
-                $project['remaining_budget'] = $totalBudget - $usedBudget;
+                $project['remaining_budget'] = $actualTotalBudget - $usedBudget;
             }
             
             return $project;
@@ -120,28 +167,34 @@ class ProjectService {
      */
     public function createProject($projectData, $createdBy) {
         try {
+            // Validate input data
+            $this->validateProjectData($projectData);
+            
             $this->conn->beginTransaction();
+            
+            // Sanitize input data
+            $sanitizedData = $this->sanitizeProjectData($projectData);
             
             // Insert project
             $query = "INSERT INTO projects (name, budget, work_group, responsible_person, description, start_date, end_date, status, created_by) 
                      VALUES (:name, :budget, :work_group, :responsible_person, :description, :start_date, :end_date, :status, :created_by)";
             
             // Debug: Log the budget value being inserted
-            error_log("ProjectService DEBUG - Budget value type: " . gettype($projectData['budget']));
-            error_log("ProjectService DEBUG - Budget value: " . var_export($projectData['budget'], true));
-            error_log("ProjectService DEBUG - Budget as float: " . floatval($projectData['budget']));
+            error_log("ProjectService DEBUG - Budget value type: " . gettype($sanitizedData['budget']));
+            error_log("ProjectService DEBUG - Budget value: " . var_export($sanitizedData['budget'], true));
+            error_log("ProjectService DEBUG - Budget as float: " . floatval($sanitizedData['budget']));
             
             $stmt = $this->conn->prepare($query);
-            $stmt->bindParam(':name', $projectData['name']);
+            $stmt->bindParam(':name', $sanitizedData['name']);
             // Ensure budget is properly cast to float
-            $budgetValue = floatval($projectData['budget']);
+            $budgetValue = floatval($sanitizedData['budget']);
             $stmt->bindParam(':budget', $budgetValue);
-            $stmt->bindParam(':work_group', $projectData['work_group']);
-            $stmt->bindParam(':responsible_person', $projectData['responsible_person']);
-            $stmt->bindParam(':description', $projectData['description']);
-            $stmt->bindParam(':start_date', $projectData['start_date']);
-            $stmt->bindParam(':end_date', $projectData['end_date']);
-            $stmt->bindParam(':status', $projectData['status']);
+            $stmt->bindParam(':work_group', $sanitizedData['work_group']);
+            $stmt->bindParam(':responsible_person', $sanitizedData['responsible_person']);
+            $stmt->bindParam(':description', $sanitizedData['description']);
+            $stmt->bindParam(':start_date', $sanitizedData['start_date']);
+            $stmt->bindParam(':end_date', $sanitizedData['end_date']);
+            $stmt->bindParam(':status', $sanitizedData['status']);
             $stmt->bindParam(':created_by', $createdBy);
             
             error_log("ProjectService DEBUG - About to execute INSERT with budget: " . $budgetValue);
@@ -181,37 +234,66 @@ class ProjectService {
      */
     public function updateProject($projectId, $projectData) {
         try {
+            // Check if this is a status-only update
+            $isStatusOnlyUpdate = (count($projectData) === 1 && isset($projectData['status']));
+            
+            if (!$isStatusOnlyUpdate) {
+                // Validate input data for full update
+                $this->validateProjectData($projectData, $projectId);
+            } else {
+                // For status-only update, just validate status
+                if (empty($projectData['status'])) {
+                    throw new Exception('กรุณาเลือกสถานะโครงการ');
+                }
+                $validStatuses = ['active', 'completed', 'suspended'];
+                if (!in_array($projectData['status'], $validStatuses)) {
+                    throw new Exception('สถานะโครงการไม่ถูกต้อง');
+                }
+            }
+            
+            // Sanitize input data
+            $sanitizedData = $this->sanitizeProjectData($projectData);
+            
             $this->conn->beginTransaction();
             
             // Update project
-            $query = "UPDATE projects SET 
-                     name = :name, 
-                     budget = :budget, 
-                     work_group = :work_group, 
-                     responsible_person = :responsible_person, 
-                     description = :description, 
-                     start_date = :start_date, 
-                     end_date = :end_date, 
-                     status = :status 
-                     WHERE id = :project_id";
-            
-            $stmt = $this->conn->prepare($query);
-            $stmt->bindParam(':name', $projectData['name']);
-            $stmt->bindParam(':budget', $projectData['budget']);
-            $stmt->bindParam(':work_group', $projectData['work_group']);
-            $stmt->bindParam(':responsible_person', $projectData['responsible_person']);
-            $stmt->bindParam(':description', $projectData['description']);
-            $stmt->bindParam(':start_date', $projectData['start_date']);
-            $stmt->bindParam(':end_date', $projectData['end_date']);
-            $stmt->bindParam(':status', $projectData['status']);
-            $stmt->bindParam(':project_id', $projectId);
+            if ($isStatusOnlyUpdate) {
+                // Update only status
+                $query = "UPDATE projects SET status = :status WHERE id = :project_id";
+                $stmt = $this->conn->prepare($query);
+                $stmt->bindParam(':status', $sanitizedData['status']);
+                $stmt->bindParam(':project_id', $projectId);
+            } else {
+                // Update all fields
+                $query = "UPDATE projects SET 
+                         name = :name, 
+                         budget = :budget, 
+                         work_group = :work_group, 
+                         responsible_person = :responsible_person, 
+                         description = :description, 
+                         start_date = :start_date, 
+                         end_date = :end_date, 
+                         status = :status 
+                         WHERE id = :project_id";
+                
+                $stmt = $this->conn->prepare($query);
+                $stmt->bindParam(':name', $sanitizedData['name']);
+                $stmt->bindParam(':budget', $sanitizedData['budget']);
+                $stmt->bindParam(':work_group', $sanitizedData['work_group']);
+                $stmt->bindParam(':responsible_person', $sanitizedData['responsible_person']);
+                $stmt->bindParam(':description', $sanitizedData['description']);
+                $stmt->bindParam(':start_date', $sanitizedData['start_date']);
+                $stmt->bindParam(':end_date', $sanitizedData['end_date']);
+                $stmt->bindParam(':status', $sanitizedData['status']);
+                $stmt->bindParam(':project_id', $projectId);
+            }
             
             if (!$stmt->execute()) {
                 throw new Exception('ไม่สามารถอัปเดตโครงการได้');
             }
             
-            // Update budget categories if provided
-            if (isset($projectData['budget_categories']) && is_array($projectData['budget_categories'])) {
+            // Update budget categories if provided (skip for status-only updates)
+            if (!$isStatusOnlyUpdate && isset($projectData['budget_categories']) && is_array($projectData['budget_categories'])) {
                 // First, delete all existing budget categories for this project
                 // (only those without transactions to prevent data loss)
                 $deleteQuery = "DELETE bc FROM budget_categories bc 
@@ -343,6 +425,7 @@ class ProjectService {
                 foreach ($allCategories as $category) {
                     $formattedCategories[] = [
                         'id' => $category['id'],
+                        'category_type_id' => $category['id'], // Use category_types.id as category_type_id
                         'category' => $category['category_key'],
                         'category_name' => $category['category_name'],
                         'amount' => 0
@@ -351,14 +434,26 @@ class ProjectService {
                 return $formattedCategories;
             }
             
+            // Include TransactionService for balance calculation
+            require_once __DIR__ . '/TransactionService.php';
+            $transactionService = new TransactionService();
+            
             // Format project categories for JavaScript consumption
             $formattedCategories = [];
             foreach ($projectCategories as $category) {
+                $initialAmount = floatval($category['budget_amount']) ?: 0;
+                
+                // Calculate remaining balance for this category
+                $remainingBalance = $transactionService->getProjectCategoryBalance($projectId, $category['category_key']);
+                
                 $formattedCategories[] = [
                     'id' => $category['id'],
+                    'category_type_id' => $category['category_type_id'], // Add category_type_id for transactions
                     'category' => $category['category_key'],
                     'category_name' => $category['category_name'] ?: $category['category_key'],
-                    'amount' => floatval($category['budget_amount']) ?: 0
+                    'amount' => $initialAmount, // Use initial budget amount for budget summary
+                    'remaining_balance' => $remainingBalance, // Keep remaining balance for reference
+                    'initial_amount' => $initialAmount // Keep initial amount for reference
                 ];
             }
             
@@ -436,7 +531,8 @@ class ProjectService {
         try {
             $query = "SELECT COALESCE(SUM(amount), 0) as used_budget 
                      FROM transactions 
-                     WHERE project_id = :project_id";
+                     WHERE project_id = :project_id 
+                     AND transaction_type NOT IN ('transfer_in', 'transfer_out')";
             
             $stmt = $this->conn->prepare($query);
             $stmt->bindParam(':project_id', $projectId);
@@ -475,6 +571,136 @@ class ProjectService {
                 'total_budget' => 0
             ];
         }
+    }
+
+    /**
+     * Validate project data
+     */
+    private function validateProjectData($projectData, $projectId = null) {
+        // Required fields validation
+        $requiredFields = ['name', 'work_group', 'responsible_person', 'start_date', 'end_date', 'status'];
+        
+        foreach ($requiredFields as $field) {
+            if (empty($projectData[$field])) {
+                throw new Exception("กรุณากรอก{$this->getFieldLabel($field)}");
+            }
+        }
+        
+        // Length validation
+        if (strlen($projectData['name']) > 255) {
+            throw new Exception('ชื่อโครงการต้องไม่เกิน 255 ตัวอักษร');
+        }
+        
+        if (strlen($projectData['work_group']) > 100) {
+            throw new Exception('หน่วยงานต้องไม่เกิน 100 ตัวอักษร');
+        }
+        
+        if (strlen($projectData['responsible_person']) > 100) {
+            throw new Exception('ผู้รับผิดชอบต้องไม่เกิน 100 ตัวอักษร');
+        }
+        
+        if (!empty($projectData['description']) && strlen($projectData['description']) > 1000) {
+            throw new Exception('คำอธิบายต้องไม่เกิน 1000 ตัวอักษร');
+        }
+        
+        // Date validation
+        if (strtotime($projectData['start_date']) === false) {
+            throw new Exception('รูปแบบวันที่เริ่มต้นไม่ถูกต้อง');
+        }
+        
+        if (strtotime($projectData['end_date']) === false) {
+            throw new Exception('รูปแบบวันที่สิ้นสุดไม่ถูกต้อง');
+        }
+        
+        if (strtotime($projectData['start_date']) >= strtotime($projectData['end_date'])) {
+            throw new Exception('วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด');
+        }
+        
+        // Status validation
+        $validStatuses = ['active', 'completed', 'suspended'];
+        if (!in_array($projectData['status'], $validStatuses)) {
+            throw new Exception('สถานะโครงการไม่ถูกต้อง');
+        }
+        
+        // Budget validation
+        if (isset($projectData['budget']) && (!is_numeric($projectData['budget']) || $projectData['budget'] < 0)) {
+            throw new Exception('งบประมาณต้องเป็นตัวเลขที่มากกว่าหรือเท่ากับ 0');
+        }
+        
+        // Check for duplicate project name (excluding current project if updating)
+        $checkQuery = "SELECT id FROM projects WHERE name = :name";
+        $params = [':name' => $projectData['name']];
+        
+        if ($projectId) {
+            $checkQuery .= " AND id != :project_id";
+            $params[':project_id'] = $projectId;
+        }
+        
+        $checkStmt = $this->conn->prepare($checkQuery);
+        foreach ($params as $key => $value) {
+            $checkStmt->bindValue($key, $value);
+        }
+        $checkStmt->execute();
+        
+        if ($checkStmt->fetch()) {
+            throw new Exception('ชื่อโครงการนี้มีอยู่แล้วในระบบ');
+        }
+    }
+    
+    /**
+     * Sanitize project data
+     */
+    private function sanitizeProjectData($projectData) {
+        $sanitized = [];
+        
+        // Sanitize string fields
+        $stringFields = ['name', 'work_group', 'responsible_person', 'description'];
+        foreach ($stringFields as $field) {
+            if (isset($projectData[$field])) {
+                $sanitized[$field] = trim(strip_tags($projectData[$field]));
+            }
+        }
+        
+        // Sanitize date fields
+        $dateFields = ['start_date', 'end_date'];
+        foreach ($dateFields as $field) {
+            if (isset($projectData[$field])) {
+                $sanitized[$field] = date('Y-m-d', strtotime($projectData[$field]));
+            }
+        }
+        
+        // Sanitize numeric fields
+        if (isset($projectData['budget'])) {
+            $sanitized['budget'] = floatval($projectData['budget']);
+        }
+        
+        // Sanitize status
+        if (isset($projectData['status'])) {
+            $sanitized['status'] = trim($projectData['status']);
+        }
+        
+        // Sanitize created_by
+        if (isset($projectData['created_by'])) {
+            $sanitized['created_by'] = intval($projectData['created_by']);
+        }
+        
+        return $sanitized;
+    }
+    
+    /**
+     * Get field label for validation messages
+     */
+    private function getFieldLabel($field) {
+        $labels = [
+            'name' => 'ชื่อโครงการ',
+            'work_group' => 'หน่วยงาน',
+            'responsible_person' => 'ผู้รับผิดชอบ',
+            'start_date' => 'วันที่เริ่มต้น',
+            'end_date' => 'วันที่สิ้นสุด',
+            'status' => 'สถานะ'
+        ];
+        
+        return $labels[$field] ?? $field;
     }
 }
 ?>

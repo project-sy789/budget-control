@@ -27,8 +27,8 @@ try {
     
     echo "Connected to database successfully.\n";
     
-    // Read and execute schema.sql first
-    $schemaFile = __DIR__ . '/schema.sql';
+    // Read and execute schema_mysql.sql first
+    $schemaFile = __DIR__ . '/schema_mysql.sql';
     if (file_exists($schemaFile)) {
         echo "Importing database schema...\n";
         $schemaSql = file_get_contents($schemaFile);

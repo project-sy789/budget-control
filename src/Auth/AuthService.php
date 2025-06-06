@@ -206,7 +206,7 @@ class AuthService {
             $stmt = $this->conn->prepare($query);
             $stmt->execute();
 
-            return $stmt->fetchAll();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (Exception $e) {
             error_log("Get all users error: " . $e->getMessage());
             return [];
@@ -240,6 +240,91 @@ class AuthService {
             return [
                 'success' => false,
                 'message' => 'เกิดข้อผิดพลาดในการอัปเดตสถานะ'
+            ];
+        }
+    }
+
+    /**
+     * Update user information (admin only)
+     */
+    public function updateUser($userId, $email, $displayName, $role, $approved) {
+        try {
+            $query = "UPDATE users SET email = :email, display_name = :display_name, role = :role, approved = :approved WHERE id = :user_id";
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(':email', $email);
+            $stmt->bindParam(':display_name', $displayName);
+            $stmt->bindParam(':role', $role);
+            $stmt->bindParam(':approved', $approved);
+            $stmt->bindParam(':user_id', $userId);
+
+            if ($stmt->execute()) {
+                return [
+                    'success' => true,
+                    'message' => 'อัปเดตข้อมูลผู้ใช้สำเร็จ'
+                ];
+            } else {
+                return [
+                    'success' => false,
+                    'message' => 'ไม่สามารถอัปเดตข้อมูลผู้ใช้ได้'
+                ];
+            }
+        } catch (Exception $e) {
+            error_log("Update user error: " . $e->getMessage());
+            return [
+                'success' => false,
+                'message' => 'เกิดข้อผิดพลาดในการอัปเดตข้อมูล'
+            ];
+        }
+    }
+
+    /**
+     * Delete user (admin only)
+     */
+    public function deleteUser($userId) {
+        try {
+            // Check if user exists
+            $checkQuery = "SELECT id, username, role FROM users WHERE id = :user_id";
+            $checkStmt = $this->conn->prepare($checkQuery);
+            $checkStmt->bindParam(':user_id', $userId);
+            $checkStmt->execute();
+            
+            $user = $checkStmt->fetch();
+            if (!$user) {
+                return [
+                    'success' => false,
+                    'message' => 'ไม่พบผู้ใช้ที่ต้องการลบ'
+                ];
+            }
+            
+            // Prevent deletion of default admin user
+            if ($user['username'] === 'admin') {
+                return [
+                    'success' => false,
+                    'message' => 'ไม่สามารถลบผู้ดูแลระบบเริ่มต้นได้'
+                ];
+            }
+            
+            // Delete user
+            $deleteQuery = "DELETE FROM users WHERE id = :user_id";
+            $deleteStmt = $this->conn->prepare($deleteQuery);
+            $deleteStmt->bindParam(':user_id', $userId);
+            
+            if ($deleteStmt->execute()) {
+                return [
+                    'success' => true,
+                    'message' => 'ลบผู้ใช้สำเร็จ'
+                ];
+            } else {
+                return [
+                    'success' => false,
+                    'message' => 'ไม่สามารถลบผู้ใช้ได้'
+                ];
+            }
+        } catch (Exception $e) {
+            error_log("Delete user error: " . $e->getMessage());
+            return [
+                'success' => false,
+                'message' => 'เกิดข้อผิดพลาดในการลบผู้ใช้'
             ];
         }
     }

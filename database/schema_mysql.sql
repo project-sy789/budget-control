@@ -11,7 +11,7 @@ CREATE TABLE users (
     email VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     display_name VARCHAR(100) NOT NULL,
-    role ENUM('admin', 'user', 'pending') DEFAULT 'pending',
+    role ENUM('admin', 'manager', 'user', 'pending') DEFAULT 'pending',
     approved BOOLEAN DEFAULT FALSE,
     department VARCHAR(100),
     position VARCHAR(100),
@@ -117,5 +117,36 @@ INSERT INTO category_types (category_key, category_name, description) VALUES
 ('INCOME', 'เงินรายได้สถานศึกษา', 'เงินรายได้ของสถานศึกษา'),
 ('LUNCH', 'เงินอาหารกลางวัน', 'เงินสำหรับอาหารกลางวันนักเรียน'),
 ('SUBSIDY', 'เงินอุดหนุนรายหัว', 'เงินอุดหนุนรายหัวจากรัฐบาล');
+
+-- User sessions table for authentication
+CREATE TABLE user_sessions (
+    id VARCHAR(128) PRIMARY KEY,
+    user_id INT NOT NULL,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_expires (user_id, expires_at)
+);
+
+-- System settings table
+CREATE TABLE system_settings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    setting_key VARCHAR(100) UNIQUE NOT NULL,
+    setting_value TEXT,
+    setting_type ENUM('text', 'number', 'boolean', 'file') DEFAULT 'text',
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Insert default system settings
+INSERT INTO system_settings (setting_key, setting_value, setting_type, description) VALUES
+('site_name', 'ระบบควบคุมงบประมาณ', 'text', 'ชื่อเว็บไซต์'),
+('organization_name', 'โรงเรียนซับใหญ่วิทยาคม', 'text', 'ชื่อหน่วยงาน'),
+('site_title', 'ระบบควบคุมงบประมาณ - โรงเรียนซับใหญ่วิทยาคม', 'text', 'ชื่อเรื่องของเว็บไซต์'),
+('site_icon', '', 'file', 'ไอคอนของเว็บไซต์'),
+('enable_pwa', '1', 'boolean', 'เปิดใช้งาน Progressive Web App');
 
 -- No default admin user - will be created during installation

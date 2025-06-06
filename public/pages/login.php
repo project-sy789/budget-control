@@ -3,6 +3,13 @@
  * Login Page - Username/Password Authentication
  */
 
+// Include SettingsService if not already included
+if (!class_exists('SettingsService')) {
+    require_once __DIR__ . '/../../src/Services/SettingsService.php';
+    $settingsService = new SettingsService();
+    $siteConfig = $settingsService->getSiteConfig();
+}
+
 $error = '';
 $success = '';
 
@@ -20,9 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Create session
             $sessionManager->createSession($loginResult['user']['id']);
             
-            // Redirect to dashboard
-            header('Location: index.php?page=dashboard');
-            exit;
+            // Set success flag for JavaScript handling
+            $success = 'login_success';
         } else {
             $error = $loginResult['message'];
         }
@@ -35,7 +41,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>เข้าสู่ระบบ - ระบบควบคุมการเบิกจ่ายโครงการ v2</title>
+    <title>เข้าสู่ระบบ - <?= htmlspecialchars($siteConfig['site_title']) ?></title>
+    
+    <!-- Favicon -->
+    <?php if ($siteConfig['site_icon']): ?>
+    <link rel="icon" type="image/svg+xml" href="<?= htmlspecialchars($siteConfig['site_icon']) ?>">
+    <link rel="icon" type="image/x-icon" href="../favicon.ico">
+    <link rel="apple-touch-icon" href="<?= htmlspecialchars($siteConfig['site_icon']) ?>">
+    <?php else: ?>
+    <link rel="icon" type="image/x-icon" href="../favicon.ico">
+    <?php endif; ?>
+    
+    <!-- PWA Manifest -->
+    <?php if ($siteConfig['enable_pwa']): ?>
+    <link rel="manifest" href="../manifest.php">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="<?= htmlspecialchars($siteConfig['site_name']) ?>">
+    <?php endif; ?>
     
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -146,9 +170,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="login-container">
         <!-- Header -->
         <div class="login-header text-center py-4">
+            <?php if ($siteConfig['site_icon']): ?>
+            <img src="<?= htmlspecialchars($siteConfig['site_icon']) ?>" 
+                 alt="<?= htmlspecialchars($siteConfig['site_name']) ?>" 
+                 style="width: 64px; height: 64px; object-fit: contain;" 
+                 class="mb-2">
+            <?php else: ?>
             <i class="bi bi-shield-lock fs-1 mb-2"></i>
-            <h4 class="mb-1">ระบบควบคุมงบประมาณ</h4>
-            <small class="opacity-75">เวอร์ชัน 2.0</small>
+            <?php endif; ?>
+            <h4 class="mb-1"><?= htmlspecialchars($siteConfig['site_name']) ?></h4>
+            <small class="opacity-75"><?= htmlspecialchars($siteConfig['organization_name']) ?></small>
         </div>
         
         <!-- Login Form -->
@@ -231,13 +262,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ติดต่อผู้ดูแลระบบหากมีปัญหาการเข้าสู่ระบบ
                 </small>
             </div>
-        </div>
-        
-        <!-- Footer -->
-        <div class="text-center py-3 border-top">
-            <small class="text-muted">
-                © 2024 ระบบควบคุมการเบิกจ่ายโครงการ v2.0
-            </small>
+            
+            <!-- Developer Information -->
+            <div class="text-center mt-3">
+                <div class="mb-2">
+                    <h6 class="text-primary mb-2">
+                        <i class="bi bi-gear-fill me-2"></i>
+                        ระบบควบคุมการเบิกจ่ายโครงการ v2.0
+                    </h6>
+                </div>
+                <div class="d-flex justify-content-center align-items-center flex-wrap gap-2 mb-2">
+                    <div class="text-center">
+                        <i class="bi bi-person-badge text-success me-1"></i>
+                        <span class="text-muted">พัฒนาโดย:</span>
+                        <strong class="text-dark">นายณัฐรวี วิเศษสมบัติ</strong>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-center align-items-center flex-wrap gap-2 mb-2">
+                    <div class="text-center">
+                        <i class="bi bi-briefcase text-primary me-1"></i>
+                        <span class="text-muted">ตำแหน่ง:</span>
+                        <strong class="text-dark">ครูผู้ช่วย</strong>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-center align-items-center flex-wrap gap-2 mb-2">
+                    <div class="text-center">
+                        <i class="bi bi-building text-warning me-1"></i>
+                        <span class="text-muted">สังกัด:</span>
+                        <strong class="text-dark"><?= htmlspecialchars($siteConfig['organization_name']) ?></strong>
+                    </div>
+                </div>
+
+            </div>
         </div>
     </div>
     
@@ -259,7 +315,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         });
         
-        // Form validation
+        // Form validation and loading
         document.getElementById('loginForm').addEventListener('submit', function(e) {
             const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
@@ -269,6 +325,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 alert('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน');
                 return false;
             }
+            
+            // Show loading indicator
+            const submitBtn = this.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>กำลังเข้าสู่ระบบ...';
+                submitBtn.disabled = true;
+            }
+            
+            // Add a small delay to ensure the loading state is visible
+            setTimeout(() => {
+                // The form will submit naturally after this timeout
+            }, 100);
         });
         
         // Auto-focus on username field
@@ -282,6 +350,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 document.getElementById('loginForm').submit();
             }
         });
+        
+        // Handle successful login redirect
+        <?php if ($success === 'login_success'): ?>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Show loading overlay
+            document.body.innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.95); display: flex; justify-content: center; align-items: center; z-index: 9999; flex-direction: column;">
+                    <div style="width: 50px; height: 50px; border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <p style="margin-top: 20px; color: #667eea; font-family: 'Sarabun', sans-serif;">กำลังเข้าสู่ระบบ...</p>
+                    <style>
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                    </style>
+                </div>
+            `;
+            
+            // Redirect after a short delay
+            setTimeout(function() {
+                window.location.replace('index.php?page=dashboard');
+            }, 500);
+        });
+        <?php endif; ?>
     </script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 -- Sample Data for Budget Control System
 -- This file contains realistic sample data for testing and demonstration
 
-USE budget_control;
+USE subyaisite_budget;
 
 -- Insert additional users
 INSERT INTO users (username, email, password_hash, display_name, role, approved, department, position) VALUES

@@ -65,8 +65,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $role = $_POST['role'];
             $approved = isset($_POST['is_approved']) ? 1 : 0;
             
+            // Debug logging
+            error_log("Update user request - User ID: $userId, Role: $role, Email: $email, Display Name: $displayName, Approved: $approved");
+            
+            // Validate role
+            $validRoles = ['user', 'manager', 'admin'];
+            if (!in_array($role, $validRoles)) {
+                $message = 'บทบาทที่เลือกไม่ถูกต้อง';
+                $messageType = 'danger';
+                break;
+            }
+            
             try {
-                $result = $authService->updateUserStatus($userId, $role, $approved);
+                $result = $authService->updateUser($userId, $email, $displayName, $role, $approved);
+                error_log("Update user result: " . json_encode($result));
+                
                 if ($result['success']) {
                     $message = $result['message'];
                     $messageType = 'success';
@@ -75,6 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $messageType = 'danger';
                 }
             } catch (Exception $e) {
+                error_log("Update user exception: " . $e->getMessage());
                 $message = 'เกิดข้อผิดพลาด: ' . $e->getMessage();
                 $messageType = 'danger';
             }
@@ -95,6 +109,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $messageType = 'success';
                     } else {
                         $message = 'ไม่สามารถรีเซ็ตรหัสผ่านได้';
+                        $messageType = 'danger';
+                    }
+                } catch (Exception $e) {
+                    $message = 'เกิดข้อผิดพลาด: ' . $e->getMessage();
+                    $messageType = 'danger';
+                }
+            }
+            break;
+            
+        case 'delete_user':
+            $userId = intval($_POST['user_id']);
+            
+            // Prevent admin from deleting themselves
+            if ($userId == $currentUser['id']) {
+                $message = 'ไม่สามารถลบบัญชีของตนเองได้';
+                $messageType = 'danger';
+            } else {
+                try {
+                    $result = $authService->deleteUser($userId);
+                    if ($result['success']) {
+                        $message = $result['message'];
+                        $messageType = 'success';
+                    } else {
+                        $message = $result['message'];
                         $messageType = 'danger';
                     }
                 } catch (Exception $e) {
@@ -239,13 +277,26 @@ $roles = [
                                 <td>
                                     <div class="btn-group btn-group-sm" role="group">
                                         <button type="button" class="btn btn-outline-primary" 
-                                                onclick="editUser(<?= htmlspecialchars(json_encode($user)) ?>)">
+                                                onclick="editUser(<?php 
+                                                    // Pass user data directly without modification
+                                                    $userForEdit = $user;
+                                                    // Debug: log the complete user data being passed
+                                                    error_log('Passing user to editUser - ID: ' . $user['id'] . ', Username: ' . $user['username'] . ', Role: "' . $user['role'] . '"');
+                                                    error_log('Complete user data: ' . json_encode($userForEdit));
+                                                    echo htmlspecialchars(json_encode($userForEdit, JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8');
+                                                ?>)">
                                             <i class="bi bi-pencil"></i>
                                         </button>
                                         <button type="button" class="btn btn-outline-warning" 
                                                 onclick="resetPassword(<?= $user['id'] ?>, '<?= htmlspecialchars($user['username']) ?>')">
                                             <i class="bi bi-key"></i>
                                         </button>
+                                        <?php if ($user['id'] != $currentUser['id'] && $user['username'] !== 'admin'): ?>
+                                        <button type="button" class="btn btn-outline-danger" 
+                                                onclick="deleteUser(<?= $user['id'] ?>, '<?= htmlspecialchars($user['username']) ?>')">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>
@@ -348,6 +399,37 @@ $roles = [
     </div>
 </div>
 
+<!-- Delete User Modal -->
+<div class="modal fade" id="deleteUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">ลบผู้ใช้</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="deleteUserForm">
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="delete_user">
+                    <input type="hidden" name="user_id" id="delete_user_id">
+                    
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>คำเตือน!</strong> การลบผู้ใช้จะไม่สามารถกู้คืนได้
+                    </div>
+                    
+                    <p>คุณแน่ใจหรือไม่ที่จะลบผู้ใช้: <strong id="delete_username"></strong></p>
+                    
+                    <p class="text-muted">ข้อมูลทั้งหมดของผู้ใช้นี้จะถูกลบออกจากระบบอย่างถาวร</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-danger">ลบผู้ใช้</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 // Form validation
 document.getElementById('createUserForm').addEventListener('submit', function(e) {
@@ -361,16 +443,67 @@ document.getElementById('createUserForm').addEventListener('submit', function(e)
     }
 });
 
+// Add form submission debugging for edit user form
+document.getElementById('editUserForm').addEventListener('submit', function(e) {
+    const formData = new FormData(this);
+    console.log('Edit user form submission:');
+    for (let [key, value] of formData.entries()) {
+        console.log(key + ': ' + value);
+    }
+});
+
 // Edit user function
 function editUser(user) {
+    console.log('editUser called with:', user);
+    console.log('User ID:', user.id, 'Username:', user.username, 'Role:', user.role);
+    console.log('Role type:', typeof user.role, 'Role length:', user.role ? user.role.length : 'undefined');
+    
+    // Validate user object
+    if (!user || !user.id) {
+        console.error('Invalid user object passed to editUser:', user);
+        alert('เกิดข้อผิดพลาดในการโหลดข้อมูลผู้ใช้');
+        return;
+    }
+    
     document.getElementById('edit_user_id').value = user.id;
-    document.getElementById('edit_username').value = user.username;
-    document.getElementById('edit_email').value = user.email;
-    document.getElementById('edit_full_name').value = user.display_name;
-    document.getElementById('edit_role').value = user.role;
+    document.getElementById('edit_username').value = user.username || '';
+    document.getElementById('edit_email').value = user.email || '';
+    document.getElementById('edit_full_name').value = user.display_name || '';
     document.getElementById('edit_is_approved').checked = user.approved == 1;
     
-    new bootstrap.Modal(document.getElementById('editUserModal')).show();
+    // Show modal first
+    const modal = new bootstrap.Modal(document.getElementById('editUserModal'));
+    modal.show();
+    
+    // Set role value after a small delay to ensure dropdown is rendered
+    setTimeout(function() {
+        const roleSelect = document.getElementById('edit_role');
+        console.log('Setting role to:', user.role);
+        console.log('Available options:', Array.from(roleSelect.options).map(opt => opt.value));
+        
+        // Set role value with better validation
+        if (user.role && roleSelect) {
+            // First, try to find the exact role match
+            let roleFound = false;
+            for (let i = 0; i < roleSelect.options.length; i++) {
+                if (roleSelect.options[i].value === user.role) {
+                    roleSelect.selectedIndex = i;
+                    roleFound = true;
+                    console.log('Role set successfully to:', user.role);
+                    break;
+                }
+            }
+            
+            // If role not found, log error but don't change to default
+            if (!roleFound) {
+                console.error('Role "' + user.role + '" not found in dropdown options');
+                console.log('Available options:', Array.from(roleSelect.options).map(opt => opt.value));
+                // Keep the current selection instead of defaulting to first option
+            }
+        } else {
+            console.warn('No role specified or role select not found');
+        }
+    }, 100);
 }
 
 // Reset password function
@@ -379,7 +512,16 @@ function resetPassword(userId, username) {
     document.getElementById('reset_username').textContent = username;
     document.getElementById('new_password').value = '';
     
-    new bootstrap.Modal(document.getElementById('resetPasswordModal')).show();
+    const modal = new bootstrap.Modal(document.getElementById('resetPasswordModal'));
+    modal.show();
+}
+
+function deleteUser(userId, username) {
+    document.getElementById('delete_user_id').value = userId;
+    document.getElementById('delete_username').textContent = username;
+    
+    const modal = new bootstrap.Modal(document.getElementById('deleteUserModal'));
+    modal.show();
 }
 
 // DataTable initialization

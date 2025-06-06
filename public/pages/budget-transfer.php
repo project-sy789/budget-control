@@ -3,8 +3,53 @@
  * Budget Transfer Page - Transfer budget between projects
  */
 
+// Check if this page is being accessed directly (not included by index.php)
+if (!isset($projectService)) {
+    session_start();
+    
+    // Include required files
+    require_once __DIR__ . '/../../config/database.php';
+    require_once __DIR__ . '/../../src/Auth/SessionManager.php';
+    require_once __DIR__ . '/../../src/Auth/AuthService.php';
+    require_once __DIR__ . '/../../src/Services/ProjectService.php';
+    require_once __DIR__ . '/../../src/Services/TransactionService.php';
+    
+    // Initialize database connection
+    $database = new Database();
+    $db = $database->getConnection();
+    
+    // Initialize services
+    $sessionManager = new SessionManager();
+    $authService = new AuthService();
+    $projectService = new ProjectService();
+    $transactionService = new TransactionService();
+    
+    // Check if user is logged in
+    $isLoggedIn = $sessionManager->isLoggedIn();
+    $currentUser = null;
+    
+    if ($isLoggedIn) {
+        $userId = $sessionManager->getCurrentUserId();
+        $currentUser = $authService->getUserById($userId);
+    } else {
+        // Redirect to login if not logged in
+        header('Location: ../index.php?page=login');
+        exit;
+    }
+    
+    $isDirectAccess = true;
+} else {
+    $isDirectAccess = false;
+}
+
 $message = '';
 $messageType = '';
+
+// Check for success parameter from redirect
+if (isset($_GET['success']) && $_GET['success'] == '1') {
+    $message = 'โอนงบประมาณสำเร็จ';
+    $messageType = 'success';
+}
 
 // Handle transfer submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'transfer') {
@@ -14,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $toCategory = trim($_POST['to_category']);
     $amount = floatval($_POST['amount']);
     $description = trim($_POST['description']);
-    $transferDate = $_POST['transfer_date'];
+    $transferDate = date('Y-m-d'); // Always use current date
     
     if ($fromProjectId && $toProjectId && $fromCategory && $toCategory && $amount > 0 && $fromProjectId !== $toProjectId) {
         try {
@@ -32,6 +77,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             if ($result) {
                 $message = 'โอนงบประมาณสำเร็จ';
                 $messageType = 'success';
+                // Redirect to refresh the page and show updated balances
+                if ($isDirectAccess) {
+                    header('Location: ' . $_SERVER['PHP_SELF'] . '?success=1');
+                    exit;
+                }
             } else {
                 $message = 'เกิดข้อผิดพลาดในการโอนงบประมาณ';
                 $messageType = 'danger';
@@ -69,6 +119,41 @@ foreach ($projects as $project) {
 $recentTransfers = $transactionService->getTransferHistory(10, 0);
 ?>
 
+<?php if ($isDirectAccess): ?>
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>โอนงบประมาณ - Budget Control System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+                    <div class="container-fluid">
+                        <a class="navbar-brand" href="../index.php">
+                            <i class="bi bi-calculator me-2"></i>
+                            Budget Control System
+                        </a>
+                        <div class="navbar-nav ms-auto">
+                            <span class="navbar-text me-3">
+                                <i class="bi bi-person-circle me-1"></i>
+                                <?= htmlspecialchars($currentUser['display_name'] ?? 'User') ?>
+                            </span>
+                            <a href="../index.php?page=logout" class="btn btn-outline-light btn-sm">
+                                <i class="bi bi-box-arrow-right me-1"></i>
+                                ออกจากระบบ
+                            </a>
+                        </div>
+                    </div>
+                </nav>
+                <div class="container">
+<?php endif; ?>
+
 <?php if ($message): ?>
 <div class="alert alert-<?= $messageType ?> alert-dismissible fade show" role="alert">
     <?= htmlspecialchars($message) ?>
@@ -99,8 +184,7 @@ $recentTransfers = $transactionService->getTransferHistory(10, 0);
                                 <option value="<?= $project['id'] ?>" 
                                         data-budget="<?= $project['remaining_budget'] ?>"
                                         data-name="<?= htmlspecialchars($project['name']) ?>">
-                                    <?= htmlspecialchars($project['name']) ?> 
-                                    (คงเหลือ: ฿<?= number_format($project['remaining_budget'], 2) ?>)
+                                    <?= htmlspecialchars($project['name']) ?>
                                 </option>
                                 <?php endforeach; ?>
                             </select>
@@ -115,8 +199,7 @@ $recentTransfers = $transactionService->getTransferHistory(10, 0);
                                 <option value="<?= $project['id'] ?>" 
                                         data-budget="<?= $project['remaining_budget'] ?>"
                                         data-name="<?= htmlspecialchars($project['name']) ?>">
-                                    <?= htmlspecialchars($project['name']) ?> 
-                                    (คงเหลือ: ฿<?= number_format($project['remaining_budget'], 2) ?>)
+                                    <?= htmlspecialchars($project['name']) ?>
                                 </option>
                                 <?php endforeach; ?>
                             </select>
@@ -287,7 +370,7 @@ $recentTransfers = $transactionService->getTransferHistory(10, 0);
                         $transferAmount = abs($transfer['amount']);
                     ?>
                     <tr>
-                        <td><?= date('d/m/Y', strtotime($transfer['date'])) ?></td>
+                        <td><?= date('d/m/Y', strtotime($transfer['transaction_date'])) ?></td>
                         <td>
                             <?php if ($isTransferOut): ?>
                             <span class="text-danger">
@@ -340,119 +423,260 @@ document.addEventListener('DOMContentLoaded', function() {
     // Project categories data from PHP
     const projectCategories = <?= json_encode($projectCategories) ?>;
     
-    // Update category dropdown based on selected project
+    // Update category dropdown based on selected project with fresh balance data
     function updateCategoryDropdown(projectId, categorySelect, defaultText) {
         categorySelect.innerHTML = '';
         
-        if (!projectId || !projectCategories[projectId]) {
+        if (!projectId) {
             categorySelect.innerHTML = `<option value="">${defaultText}</option>`;
             categorySelect.disabled = true;
-            return;
+            return Promise.resolve();
         }
         
-        categorySelect.innerHTML = '<option value="">เลือกหมวดหมู่งบประมาณ</option>';
+        // Show loading state
+        categorySelect.innerHTML = '<option value="">กำลังโหลด...</option>';
+        categorySelect.disabled = true;
         
-        const categories = projectCategories[projectId];
-        categories.forEach(category => {
-            const option = document.createElement('option');
-            option.value = category.category;
-            option.textContent = `${category.category_name} (฿${parseFloat(category.amount || 0).toLocaleString()})`;
-            option.dataset.amount = category.amount || 0;
-            categorySelect.appendChild(option);
-        });
-        
-        categorySelect.disabled = false;
+        // Fetch fresh category data with current balances using aggressive cache-busting
+        const cacheBreaker = `_t=${Date.now()}&_r=${Math.random()}`;
+        return fetch(`../../src/Services/get_project_categories.php?project_id=${projectId}&${cacheBreaker}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Fresh category data received for project:', projectId, data);
+                categorySelect.innerHTML = '<option value="">เลือกหมวดหมู่งบประมาณ</option>';
+                
+                if (data.success && data.categories) {
+                    data.categories.forEach(category => {
+                        const option = document.createElement('option');
+                        option.value = category.category;
+                        option.textContent = category.category_name;
+                        option.dataset.amount = category.remaining_balance || 0;
+                        categorySelect.appendChild(option);
+                        console.log(`Added category ${category.category} with balance: ${category.remaining_balance}`);
+                    });
+                    categorySelect.disabled = false;
+                } else {
+                    console.error('Failed to load categories:', data);
+                    categorySelect.innerHTML = `<option value="">${defaultText}</option>`;
+                    categorySelect.disabled = true;
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching categories:', error);
+                categorySelect.innerHTML = '<option value="">เกิดข้อผิดพลาดในการโหลดข้อมูล</option>';
+                categorySelect.disabled = true;
+            });
     }
     
-    // Update destination category dropdown to match source category
+    // Update destination category dropdown to match source category with fresh data
     function updateDestinationCategory(selectedCategory) {
         const toProjectId = toProjectSelect.value;
         
         toCategorySelect.innerHTML = '';
         
-        if (!selectedCategory || !toProjectId || !projectCategories[toProjectId]) {
+        if (!selectedCategory || !toProjectId) {
             toCategorySelect.innerHTML = '<option value="">เลือกหมวดหมู่ต้นทางก่อน</option>';
             toCategorySelect.disabled = true;
             return;
         }
         
-        // Find matching category in destination project
-        const toCategories = projectCategories[toProjectId];
-        const matchingCategory = toCategories.find(cat => cat.category === selectedCategory);
+        // Show loading state
+        toCategorySelect.innerHTML = '<option value="">กำลังโหลด...</option>';
+        toCategorySelect.disabled = true;
         
-        // Always allow transfer with the same category as source
-        toCategorySelect.innerHTML = '<option value="">เลือกหมวดหมู่งบประมาณ</option>';
-        const option = document.createElement('option');
-        option.value = selectedCategory;
-        
-        if (matchingCategory) {
-            // If category exists in destination project, show its current amount
-            option.textContent = `${matchingCategory.category_name} (฿${parseFloat(matchingCategory.amount || 0).toLocaleString()})`;
-            option.dataset.amount = matchingCategory.amount || 0;
-        } else {
-            // If category doesn't exist in destination project, show as new category
-            // Find the category name from source project
-            const fromProjectId = fromProjectSelect.value;
-            const fromCategories = projectCategories[fromProjectId];
-            const sourceCategory = fromCategories.find(cat => cat.category === selectedCategory);
-            const categoryName = sourceCategory ? sourceCategory.category_name : selectedCategory;
-            option.textContent = `${categoryName} (หมวดหมู่ใหม่)`;
-            option.dataset.amount = 0;
-        }
-        
-        toCategorySelect.appendChild(option);
-        toCategorySelect.disabled = false;
+        // Fetch fresh category data for destination project with aggressive cache-busting
+        const cacheBreaker = `_t=${Date.now()}&_r=${Math.random()}`;
+        fetch(`../../src/Services/get_project_categories.php?project_id=${toProjectId}&${cacheBreaker}`)
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(function(data) {
+                console.log('Fresh destination category data received:', data);
+                toCategorySelect.innerHTML = '<option value="">เลือกหมวดหมู่งบประมาณ</option>';
+                
+                var option = document.createElement('option');
+                option.value = selectedCategory;
+                
+                // Check if category exists in destination project
+                var matchingCategory = null;
+                if (data.success && data.categories) {
+                    matchingCategory = data.categories.find(function(cat) { return cat.category === selectedCategory; });
+                }
+                
+                if (matchingCategory) {
+                    // If category exists in destination project, show current balance
+                    option.textContent = matchingCategory.category_name;
+                    option.dataset.amount = matchingCategory.remaining_balance || 0;
+                } else {
+                    // If category doesn't exist, get category name from source and show as new
+                    var fromProjectId = fromProjectSelect.value;
+                    const sourceCacheBreaker = `_t=${Date.now()}&_r=${Math.random()}`;
+                    fetch(`../../src/Services/get_project_categories.php?project_id=${fromProjectId}&${sourceCacheBreaker}`)
+                        .then(function(response) {
+                            if (!response.ok) {
+                                throw new Error(`HTTP ${response.status}`);
+                            }
+                            return response.json();
+                        })
+                        .then(function(sourceData) {
+                            if (sourceData.success && sourceData.categories) {
+                                var sourceCategory = sourceData.categories.find(function(cat) { return cat.category === selectedCategory; });
+                                var categoryName = sourceCategory ? sourceCategory.category_name : selectedCategory;
+                                option.textContent = categoryName + ' (หมวดหมู่ใหม่)';
+                            } else {
+                                option.textContent = selectedCategory + ' (หมวดหมู่ใหม่)';
+                            }
+                        })
+                        .catch(function(error) {
+                            console.error('Error fetching source category name:', error);
+                            option.textContent = selectedCategory + ' (หมวดหมู่ใหม่)';
+                        });
+                    option.dataset.amount = 0; // New category starts with 0 balance
+                }
+                
+                toCategorySelect.appendChild(option);
+                toCategorySelect.disabled = false;
+            })
     }
     
-    // Update project info when selection changes
+    // Store current balances globally
+    var currentBalances = {};
+    
+    // Update project info when selection changes with real-time data
     function updateProjectInfo() {
-        const fromOption = fromProjectSelect.selectedOptions[0];
-        const toOption = toProjectSelect.selectedOptions[0];
+        var fromOption = fromProjectSelect.selectedOptions[0];
+        var toOption = toProjectSelect.selectedOptions[0];
         
         // Update from project info
         if (fromOption && fromOption.value) {
-            const fromBudget = parseFloat(fromOption.dataset.budget);
-            document.getElementById('fromProjectInfo').innerHTML = 
-                `<span class="text-info">งบประมาณคงเหลือ: ฿${fromBudget.toLocaleString()}</span>`;
+            document.getElementById('fromProjectInfo').innerHTML = '<span class="text-muted">กำลังโหลด...</span>';
+            fetch(`../../src/Services/get_project_balance.php?project_id=${fromOption.value}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.text();
+                })
+                .then(text => {
+                    console.log('Raw response:', text);
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.success) {
+                            document.getElementById('fromProjectInfo').innerHTML = 
+                                `<span class="text-info">งบประมาณคงเหลือ: ฿${parseFloat(data.balance).toLocaleString()}</span>`;
+                            currentBalances[fromOption.value] = data.balance;
+                            fromOption.dataset.currentBalance = data.balance;
+                        } else {
+                            console.error('API Error:', data.message);
+                            document.getElementById('fromProjectInfo').innerHTML = `<span class="text-danger">ไม่สามารถโหลดข้อมูลได้: ${data.message || 'Unknown error'}</span>`;
+                        }
+                    } catch (e) {
+                        console.error('JSON Parse Error:', e, 'Raw text:', text);
+                        document.getElementById('fromProjectInfo').innerHTML = '<span class="text-danger">ข้อมูลไม่ถูกต้อง</span>';
+                    }
+                    validateForm();
+                })
+                .catch((error) => {
+                    console.error('Fetch Error:', error);
+                    document.getElementById('fromProjectInfo').innerHTML = `<span class="text-danger">เกิดข้อผิดพลาด: ${error.message}</span>`;
+                    validateForm();
+                });
         } else {
             document.getElementById('fromProjectInfo').innerHTML = '';
         }
         
         // Update to project info
         if (toOption && toOption.value) {
-            const toBudget = parseFloat(toOption.dataset.budget);
-            document.getElementById('toProjectInfo').innerHTML = 
-                `<span class="text-info">งบประมาณคงเหลือ: ฿${toBudget.toLocaleString()}</span>`;
+            document.getElementById('toProjectInfo').innerHTML = '<span class="text-muted">กำลังโหลด...</span>';
+            fetch(`../../src/Services/get_project_balance.php?project_id=${toOption.value}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.text();
+                })
+                .then(text => {
+                    console.log('Raw response:', text);
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.success) {
+                            document.getElementById('toProjectInfo').innerHTML = 
+                                `<span class="text-info">งบประมาณคงเหลือ: ฿${parseFloat(data.balance).toLocaleString()}</span>`;
+                            currentBalances[toOption.value] = data.balance;
+                            toOption.dataset.currentBalance = data.balance;
+                        } else {
+                            console.error('API Error:', data.message);
+                            document.getElementById('toProjectInfo').innerHTML = `<span class="text-danger">ไม่สามารถโหลดข้อมูลได้: ${data.message || 'Unknown error'}</span>`;
+                        }
+                    } catch (e) {
+                        console.error('JSON Parse Error:', e, 'Raw text:', text);
+                        document.getElementById('toProjectInfo').innerHTML = '<span class="text-danger">ข้อมูลไม่ถูกต้อง</span>';
+                    }
+                    validateForm();
+                })
+                .catch((error) => {
+                    console.error('Fetch Error:', error);
+                    document.getElementById('toProjectInfo').innerHTML = `<span class="text-danger">เกิดข้อผิดพลาด: ${error.message}</span>`;
+                    validateForm();
+                });
         } else {
             document.getElementById('toProjectInfo').innerHTML = '';
         }
-        
-        validateForm();
     }
     
-    // Validate amount input
+    // Validate amount input with enhanced balance preview using real-time data
     function validateAmount() {
         const fromOption = fromProjectSelect.selectedOptions[0];
+        const fromCategoryOption = fromCategorySelect.selectedOptions[0];
         const amount = parseFloat(amountInput.value);
         const amountInfo = document.getElementById('amountInfo');
         
         if (fromOption && fromOption.value && amount > 0) {
-            const fromBudget = parseFloat(fromOption.dataset.budget);
+            // Use current balance from API or fallback to dataset
+            const fromBudget = parseFloat(currentBalances[fromOption.value] || fromOption.dataset.currentBalance || fromOption.dataset.budget || 0);
+            const fromCategoryAmount = fromCategoryOption ? parseFloat(fromCategoryOption.dataset.amount || 0) : 0;
             
+            let validationHtml = '';
+            let isValid = true;
+            
+            // Check against total project budget
             if (amount > fromBudget) {
-                amountInfo.innerHTML = '<span class="text-danger">จำนวนเงินเกินงบประมาณคงเหลือ</span>';
-                return false;
-            } else {
-                amountInfo.innerHTML = '<span class="text-success">จำนวนเงินถูกต้อง</span>';
-                return true;
+                validationHtml += '<span class="text-danger">จำนวนเงินเกินงบประมาณโครงการ</span><br>';
+                isValid = false;
             }
+            
+            // Check against category budget if category is selected
+            if (fromCategoryOption && fromCategoryOption.value && amount > fromCategoryAmount) {
+                validationHtml += '<span class="text-warning">จำนวนเงินเกินงบประมาณหมวดหมู่</span><br>';
+            }
+            
+            // Show balance preview
+            if (isValid) {
+                validationHtml += '<span class="text-success">จำนวนเงินถูกต้อง</span><br>';
+                validationHtml += `<span class="text-muted">งบประมาณโครงการหลังโอน: ฿${(fromBudget - amount).toLocaleString()}</span>`;
+                
+                if (fromCategoryOption && fromCategoryOption.value) {
+                    validationHtml += `<br><span class="text-muted">งบประมาณหมวดหมู่หลังโอน: ฿${(fromCategoryAmount - amount).toLocaleString()}</span>`;
+                }
+            }
+            
+            amountInfo.innerHTML = validationHtml;
+            return isValid;
         } else {
             amountInfo.innerHTML = '';
             return false;
         }
     }
     
-    // Update transfer summary
+    // Update transfer summary with real-time balance data
     function updateSummary() {
         const fromOption = fromProjectSelect.selectedOptions[0];
         const toOption = toProjectSelect.selectedOptions[0];
@@ -462,8 +686,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (fromOption && fromOption.value && toOption && toOption.value && 
             fromCategory && toCategory && amount > 0) {
-            const fromBudget = parseFloat(fromOption.dataset.budget);
-            const toBudget = parseFloat(toOption.dataset.budget);
+            // Use current balance from API or fallback to dataset
+            var fromBudget = parseFloat(currentBalances[fromOption.value] || fromOption.dataset.currentBalance || fromOption.dataset.budget || 0);
+            var toBudget = parseFloat(currentBalances[toOption.value] || toOption.dataset.currentBalance || toOption.dataset.budget || 0);
             
             document.getElementById('summaryFromProject').textContent = fromOption.dataset.name;
             document.getElementById('summaryToProject').textContent = toOption.dataset.name;
@@ -482,13 +707,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Validate entire form
     function validateForm() {
-        const fromProjectId = fromProjectSelect.value;
-        const toProjectId = toProjectSelect.value;
-        const fromCategory = fromCategorySelect.value;
-        const toCategory = toCategorySelect.value;
-        const amount = parseFloat(amountInput.value);
+        var fromProjectId = fromProjectSelect.value;
+        var toProjectId = toProjectSelect.value;
+        var fromCategory = fromCategorySelect.value;
+        var toCategory = toCategorySelect.value;
+        var amount = parseFloat(amountInput.value);
         
-        const isValid = fromProjectId && toProjectId && fromCategory && toCategory &&
+        var isValid = fromProjectId && toProjectId && fromCategory && toCategory &&
                        fromProjectId !== toProjectId && 
                        amount > 0 && validateAmount();
         
@@ -504,9 +729,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Event listeners
     fromProjectSelect.addEventListener('change', function() {
         // Disable same project in to dropdown
-        Array.from(toProjectSelect.options).forEach(option => {
+        Array.from(toProjectSelect.options).forEach(function(option) {
             option.disabled = option.value === this.value;
-        });
+        }.bind(this));
         
         // Update category dropdown for source project
         updateCategoryDropdown(this.value, fromCategorySelect, 'เลือกโครงการต้นทางก่อน');
@@ -524,9 +749,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     toProjectSelect.addEventListener('change', function() {
         // Disable same project in from dropdown
-        Array.from(fromProjectSelect.options).forEach(option => {
+        Array.from(fromProjectSelect.options).forEach(function(option) {
             option.disabled = option.value === this.value;
-        });
+        }.bind(this));
         
         // Reset category selection
         toCategorySelect.value = '';
@@ -544,28 +769,97 @@ document.addEventListener('DOMContentLoaded', function() {
         updateProjectInfo();
     });
     
-    amountInput.addEventListener('input', validateForm);
+    amountInput.addEventListener('input', function() {
+        validateAmount();
+        updateDestinationCategoryPreview();
+        validateForm();
+    });
+    
+    // Function to update destination category preview when amount changes
+    function updateDestinationCategoryPreview() {
+        const selectedOption = toCategorySelect.selectedOptions[0];
+        const amount = parseFloat(amountInput.value || 0);
+        
+        if (selectedOption && selectedOption.value) {
+            const categoryAmount = parseFloat(selectedOption.dataset.amount);
+            let infoHtml = `<span class="text-info">งบประมาณในหมวดหมู่: ฿${categoryAmount.toLocaleString()}</span>`;
+            
+            // Show preview of balance after receiving transfer
+            if (amount > 0) {
+                var newBalance = categoryAmount + amount;
+                infoHtml += '<br><span class="text-success">หลังรับโอน: ฿' + newBalance.toLocaleString() + '</span>';
+            }
+            
+            document.getElementById('toCategoryInfo').innerHTML = infoHtml;
+        }
+    }
     
     fromCategorySelect.addEventListener('change', function() {
         const selectedOption = this.selectedOptions[0];
         if (selectedOption && selectedOption.value) {
-            const categoryAmount = parseFloat(selectedOption.dataset.amount);
+            // Always fetch fresh balance data, never use cached dataset.amount
+            const projectId = fromProjectSelect.value;
+            const categoryName = selectedOption.value;
+            
+            // Show loading state
             document.getElementById('fromCategoryInfo').innerHTML = 
-                `<span class="text-info">งบประมาณในหมวดหมู่: ฿${categoryAmount.toLocaleString()}</span>`;
+                `<span class="text-muted">กำลังโหลดข้อมูลงบประมาณ...</span>`;
+            
+            // Force fresh data with aggressive cache-busting
+            const cacheBreaker = `_t=${Date.now()}&_r=${Math.random()}`;
+            fetch(`../../src/Services/get_category_balance.php?project_id=${projectId}&category=${encodeURIComponent(categoryName)}&${cacheBreaker}`)
+                .then(response => {
+                    // Ensure we're not getting cached response
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Fresh balance data received:', data);
+                    if (data.success) {
+                        const categoryAmount = parseFloat(data.remaining_balance || 0);
+                        document.getElementById('fromCategoryInfo').innerHTML = 
+                            `<span class="text-info">งบประมาณในหมวดหมู่: ฿${categoryAmount.toLocaleString()}</span>`;
+                        // Update the dataset for consistency
+                        selectedOption.dataset.amount = categoryAmount;
+                        console.log(`Updated category ${categoryName} balance to: ${categoryAmount}`);
+                    } else {
+                        console.error('API returned error:', data);
+                        document.getElementById('fromCategoryInfo').innerHTML = 
+                            `<span class="text-danger">ไม่สามารถโหลดข้อมูลงบประมาณได้</span>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching category balance:', error);
+                    document.getElementById('fromCategoryInfo').innerHTML = 
+                        `<span class="text-danger">เกิดข้อผิดพลาดในการโหลดข้อมูล</span>`;
+                });
         } else {
             document.getElementById('fromCategoryInfo').innerHTML = '';
         }
         // Update destination category to match source category
         updateDestinationCategory(this.value);
+        // Re-validate amount when category changes
+        validateAmount();
         validateForm();
     });
     
     toCategorySelect.addEventListener('change', function() {
         const selectedOption = this.selectedOptions[0];
+        const amount = parseFloat(amountInput.value || 0);
+        
         if (selectedOption && selectedOption.value) {
             const categoryAmount = parseFloat(selectedOption.dataset.amount);
-            document.getElementById('toCategoryInfo').innerHTML = 
-                `<span class="text-info">งบประมาณในหมวดหมู่: ฿${categoryAmount.toLocaleString()}</span>`;
+            let infoHtml = `<span class="text-info">งบประมาณในหมวดหมู่: ฿${categoryAmount.toLocaleString()}</span>`;
+            
+            // Show preview of balance after receiving transfer
+            if (amount > 0) {
+                var newBalance = categoryAmount + amount;
+                infoHtml += '<br><span class="text-success">หลังรับโอน: ฿' + newBalance.toLocaleString() + '</span>';
+            }
+            
+            document.getElementById('toCategoryInfo').innerHTML = infoHtml;
         } else {
             document.getElementById('toCategoryInfo').innerHTML = '';
         }
@@ -579,11 +873,101 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
+    // Function to refresh category data after successful transfer
+    function refreshCategoryData() {
+        const fromProjectId = fromProjectSelect.value;
+        const toProjectId = toProjectSelect.value;
+        
+        // Store current selections to restore them after refresh
+        const currentFromCategory = fromCategorySelect.value;
+        const currentToCategory = toCategorySelect.value;
+        
+        // Clear category selections first
+        fromCategorySelect.value = '';
+        toCategorySelect.value = '';
+        
+        // Clear info displays
+        document.getElementById('fromCategoryInfo').innerHTML = '';
+        document.getElementById('toCategoryInfo').innerHTML = '';
+        document.getElementById('amountInfo').innerHTML = '';
+        transferSummary.style.display = 'none';
+        submitBtn.disabled = true;
+        
+        // Refresh category dropdowns with fresh data
+        const promises = [];
+        
+        if (fromProjectId) {
+            const fromPromise = updateCategoryDropdown(fromProjectId, fromCategorySelect, 'เลือกโครงการต้นทางก่อน').then(() => {
+                // If there was a previously selected category, reselect it and fetch fresh balance
+                if (currentFromCategory) {
+                    fromCategorySelect.value = currentFromCategory;
+                    // Trigger change event to fetch fresh balance data
+                    fromCategorySelect.dispatchEvent(new Event('change'));
+                }
+            });
+            promises.push(fromPromise);
+        }
+        
+        if (toProjectId) {
+            const toPromise = updateCategoryDropdown(toProjectId, toCategorySelect, 'เลือกโครงการปลายทางก่อน').then(() => {
+                // If there was a previously selected category, reselect it
+                if (currentToCategory) {
+                    toCategorySelect.value = currentToCategory;
+                    // Trigger change event to update display
+                    toCategorySelect.dispatchEvent(new Event('change'));
+                }
+            });
+            promises.push(toPromise);
+        }
+        
+        // Wait for all updates to complete
+        Promise.all(promises).then(() => {
+            console.log('Category data refresh completed');
+        }).catch(error => {
+            console.error('Error refreshing category data:', error);
+        });
+        
+        // Clear amount input
+        amountInput.value = '';
+        
+        // Show success message to user
+        const successMessage = document.createElement('div');
+        successMessage.className = 'alert alert-success alert-dismissible fade show';
+        successMessage.innerHTML = `
+            <strong>สำเร็จ!</strong> การโอนงบประมาณเสร็จสิ้น กรุณาเลือกหมวดหมู่อีกครั้งเพื่อดูยอดงบประมาณที่อัปเดต
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        // Insert message at the top of the form
+        const formContainer = document.querySelector('.card-body');
+        formContainer.insertBefore(successMessage, formContainer.firstChild);
+        
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            if (successMessage.parentNode) {
+                successMessage.remove();
+            }
+        }, 5000);
+    }
+    
+    // Check for success message and refresh data if transfer was successful
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('success') === '1') {
+        // Small delay to ensure DOM is ready
+        setTimeout(function() {
+            refreshCategoryData();
+        }, 100);
+    }
+    
     // Reset form
     form.addEventListener('reset', function() {
-        setTimeout(() => {
-            Array.from(fromProjectSelect.options).forEach(option => option.disabled = false);
-            Array.from(toProjectSelect.options).forEach(option => option.disabled = false);
+        setTimeout(function() {
+            Array.from(fromProjectSelect.options).forEach(function(option) {
+                option.disabled = false;
+            });
+            Array.from(toProjectSelect.options).forEach(function(option) {
+                option.disabled = false;
+            });
             
             // Reset category dropdowns
             fromCategorySelect.innerHTML = '<option value="">เลือกโครงการต้นทางก่อน</option>';
@@ -644,3 +1028,13 @@ document.addEventListener('DOMContentLoaded', function() {
     color: #5a5c69;
 }
 </style>
+
+<?php if ($isDirectAccess): ?>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+<?php endif; ?>

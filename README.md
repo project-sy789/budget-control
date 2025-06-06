@@ -44,7 +44,7 @@ CREATE DATABASE budget_control_v2 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_
 
 #### Import Schema
 ```bash
-mysql -u root -p budget_control_v2 < database/schema.sql
+mysql -u root -p budget_control_v2 < database/schema_mysql.sql
 ```
 
 ### 4. ตั้งค่า Environment
@@ -138,7 +138,7 @@ Budget-control-v2/
 ├── config/
 │   └── database.php          # การตั้งค่าฐานข้อมูล
 ├── database/
-│   └── schema.sql           # โครงสร้างฐานข้อมูล
+│   └── schema_mysql.sql     # โครงสร้างฐานข้อมูล MySQL
 ├── public/
 │   ├── index.php           # หน้าหลัก
 │   ├── login.php           # หน้าล็อกอิน

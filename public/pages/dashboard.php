@@ -183,21 +183,53 @@ $recentTransactions = $transactionService->getAllTransactions(null, null, 5, 0);
                         </thead>
                         <tbody>
                             <?php foreach ($recentTransactions as $transaction): ?>
+                            <?php 
+                                // Determine transaction type and display properties
+                                $transactionType = $transaction['type'] ?? $transaction['transaction_type'];
+                                $isIncome = in_array($transactionType, ['income', 'transfer_in']);
+                                $isExpense = in_array($transactionType, ['expense', 'transfer_out']);
+                                
+                                // Set display text for transaction type
+                                $typeText = 'ไม่ระบุ';
+                                $typeClass = 'bg-secondary';
+                                $amountClass = 'text-muted';
+                                $amountSign = '';
+                                
+                                if ($isIncome) {
+                                    $typeText = ($transactionType === 'transfer_in') ? 'รับโอน' : 'รายรับ';
+                                    $typeClass = 'bg-success';
+                                    $amountClass = 'text-success';
+                                    $amountSign = '+';
+                                } elseif ($isExpense) {
+                                    $typeText = ($transactionType === 'transfer_out') ? 'โอนออก' : 'รายจ่าย';
+                                    $typeClass = 'bg-danger';
+                                    $amountClass = 'text-danger';
+                                    $amountSign = '-';
+                                }
+                                
+                                // Use transaction_date field from database
+                                $transactionDate = $transaction['transaction_date'] ?? $transaction['date'] ?? null;
+                            ?>
                             <tr>
-                                <td><?= date('d/m/Y', strtotime($transaction['date'])) ?></td>
                                 <td>
-                                    <small class="text-muted"><?= htmlspecialchars($transaction['project_name']) ?></small><br>
-                                    <?= htmlspecialchars($transaction['description']) ?>
+                                    <?php if ($transactionDate): ?>
+                                        <?= date('d/m/Y', strtotime($transactionDate)) ?>
+                                    <?php else: ?>
+                                        -
+                                    <?php endif; ?>
                                 </td>
                                 <td>
-                                    <span class="<?= $transaction['amount'] >= 0 ? 'text-success' : 'text-danger' ?>">
-                                        <?= $transaction['amount'] >= 0 ? '+' : '-' ?>
-                                        ฿<?= number_format(abs($transaction['amount']), 2) ?>
+                                    <small class="text-muted"><?= htmlspecialchars($transaction['project_name'] ?? 'ไม่ระบุโครงการ') ?></small><br>
+                                    <?= htmlspecialchars($transaction['description'] ?? 'ไม่มีรายละเอียด') ?>
+                                </td>
+                                <td>
+                                    <span class="<?= $amountClass ?>">
+                                        <?= $amountSign ?>฿<?= number_format(abs($transaction['amount']), 2) ?>
                                     </span>
                                 </td>
                                 <td>
-                                    <span class="badge <?= $transaction['amount'] >= 0 ? 'bg-success' : 'bg-danger' ?>">
-                                        <?= $transaction['amount'] >= 0 ? 'รายรับ' : 'รายจ่าย' ?>
+                                    <span class="badge <?= $typeClass ?>">
+                                        <?= $typeText ?>
                                     </span>
                                 </td>
                             </tr>

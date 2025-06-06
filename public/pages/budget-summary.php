@@ -22,7 +22,7 @@ if (!empty($dateTo)) {
 }
 
 // Get data
-$projects = $projectService->getAllProjects();
+$allProjects = $projectService->getAllProjects();
 $transactionStats = $transactionService->getTransactionSummary($filters);
 $projectSummary = $projectService->getProjectSummary();
 
@@ -30,10 +30,19 @@ $projectSummary = $projectService->getProjectSummary();
 require_once '../src/Services/CategoryService.php';
 $categoryService = new CategoryService($db);
 
-// Filter projects by work group if specified
+// Filter projects for display in dropdown (keep all projects for dropdown)
+$projects = $allProjects;
+
+// Filter projects for calculations based on both work group and project filters
+$filteredProjects = $allProjects;
 if (!empty($workGroupFilter)) {
-    $projects = array_filter($projects, function($project) use ($workGroupFilter) {
+    $filteredProjects = array_filter($filteredProjects, function($project) use ($workGroupFilter) {
         return $project['work_group'] === $workGroupFilter;
+    });
+}
+if ($projectFilter > 0) {
+    $filteredProjects = array_filter($filteredProjects, function($project) use ($projectFilter) {
+        return $project['id'] == $projectFilter;
     });
 }
 
@@ -45,7 +54,7 @@ $totalRemaining = 0;
 $projectsByWorkGroup = [];
 $budgetByCategory = [];
 
-foreach ($projects as $project) {
+foreach ($filteredProjects as $project) {
     $totalBudget += $project['total_budget'];
     $totalRemaining += $project['remaining_budget'];
     
@@ -66,11 +75,44 @@ foreach ($projects as $project) {
     
     // Get category breakdown for this project
     $categories = $projectService->getProjectBudgetCategories($project['id']);
+    
+    // Also check for transactions in categories that don't have budget allocations
+    $allActiveCategories = $categoryService->getAllActiveCategories();
+    $existingCategoryKeys = array_column($categories, 'category');
+    
+    // Add categories that have transactions but no budget allocation
+    foreach ($allActiveCategories as $activeCategory) {
+        if (!in_array($activeCategory['category_key'], $existingCategoryKeys)) {
+            // Check if this category has any transactions for this project
+            $remainingBalance = $transactionService->getProjectCategoryBalanceForSummary($project['id'], $activeCategory['category_key']);
+            if ($remainingBalance != 0) { // Only include if there are transactions
+                $categories[] = [
+                    'category' => $activeCategory['category_key'],
+                    'category_name' => $activeCategory['category_name'],
+                    'amount' => 0 // No budget allocation
+                ];
+            }
+        }
+    }
+    
     foreach ($categories as $category) {
-        $remainingBalance = $transactionService->getProjectCategoryBalance($project['id'], $category['category']);
-        $categoryName = $category['category_name']; // Use category name for display
-        $usedAmount = isset($category['amount']) ? $category['amount'] - $remainingBalance : 0;
+        // Use category key for transaction balance lookup
+        $categoryKey = $category['category'] ?? '';
+        $categoryName = $category['category_name'] ?? $categoryKey;
         
+        // Skip if no category key
+        if (empty($categoryKey)) {
+            continue;
+        }
+        
+        // Get remaining balance using category key
+        $remainingBalance = $transactionService->getProjectCategoryBalanceForSummary($project['id'], $categoryKey);
+        $budgetAmount = floatval($category['amount'] ?? 0);
+        
+        // Calculate used amount: budget - remaining
+        $usedAmount = $budgetAmount - $remainingBalance;
+        
+        // Use category name as key for grouping
         if (!isset($budgetByCategory[$categoryName])) {
             $budgetByCategory[$categoryName] = [
                 'budget' => 0,
@@ -78,9 +120,10 @@ foreach ($projects as $project) {
                 'remaining' => 0
             ];
         }
-        $budgetByCategory[$categoryName]['budget'] += isset($category['amount']) ? $category['amount'] : 0;
-        $budgetByCategory[$categoryName]['used'] += $usedAmount;
-        $budgetByCategory[$categoryName]['remaining'] += $remainingBalance;
+        
+        $budgetByCategory[$categoryName]['budget'] += $budgetAmount;
+        $budgetByCategory[$categoryName]['used'] += max(0, $usedAmount); // Ensure non-negative
+        $budgetByCategory[$categoryName]['remaining'] += max(0, $remainingBalance); // Ensure non-negative
     }
 }
 
@@ -116,18 +159,6 @@ foreach ($budgetCategoriesData as $category) {
         <form method="GET" class="row g-3">
             <input type="hidden" name="page" value="budget-summary">
             
-            <div class="col-md-3">
-                <label for="project_filter" class="form-label">โครงการ</label>
-                <select class="form-select" id="project_filter" name="project_filter">
-                    <option value="">ทุกโครงการ</option>
-                    <?php foreach ($projects as $project): ?>
-                    <option value="<?= $project['id'] ?>" <?= $projectFilter == $project['id'] ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($project['name']) ?>
-                    </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            
             <div class="col-md-2">
                 <label for="work_group_filter" class="form-label">กลุ่มงาน</label>
                 <select class="form-select" id="work_group_filter" name="work_group_filter">
@@ -135,6 +166,18 @@ foreach ($budgetCategoriesData as $category) {
                     <?php foreach ($workGroups as $key => $label): ?>
                     <option value="<?= $key ?>" <?= $workGroupFilter === $key ? 'selected' : '' ?>>
                         <?= $label ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            
+            <div class="col-md-3">
+                <label for="project_filter" class="form-label">โครงการ</label>
+                <select class="form-select" id="project_filter" name="project_filter">
+                    <option value="">ทุกโครงการ</option>
+                    <?php foreach ($projects as $project): ?>
+                    <option value="<?= $project['id'] ?>" <?= $projectFilter == $project['id'] ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($project['name']) ?>
                     </option>
                     <?php endforeach; ?>
                 </select>
@@ -362,7 +405,8 @@ foreach ($budgetCategoriesData as $category) {
                         <tbody>
                             <?php foreach ($budgetByCategory as $categoryName => $data): 
                                 $usagePercent = $data['budget'] > 0 ? ($data['used'] / $data['budget']) * 100 : 0;
-                                $displayName = $budgetCategories[$categoryName] ?? $categoryName;
+                                // categoryName is already the display name from category_name field
+                                $displayName = $categoryName;
                             ?>
                             <tr>
                                 <td><?= htmlspecialchars($displayName) ?></td>
@@ -399,7 +443,7 @@ foreach ($budgetCategoriesData as $category) {
             <div class="card-body">
                 <?php 
                 $statusCounts = ['active' => 0, 'completed' => 0, 'suspended' => 0];
-                foreach ($projects as $project) {
+                foreach ($filteredProjects as $project) {
                     $statusCounts[$project['status']]++;
                 }
                 ?>
@@ -427,7 +471,7 @@ foreach ($budgetCategoriesData as $category) {
                 <div class="mt-3">
                     <h6>โครงการที่ใช้งบประมาณเกิน 80%</h6>
                     <?php 
-                    $highUsageProjects = array_filter($projects, function($project) {
+                    $highUsageProjects = array_filter($filteredProjects, function($project) {
                         return $project['total_budget'] > 0 && ($project['used_budget'] / $project['total_budget']) > 0.8;
                     });
                     ?>
@@ -506,6 +550,48 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     console.log('Budget summary chart initialized successfully!');
+});
+
+// Work group change event to filter projects
+    document.getElementById('work_group_filter').addEventListener('change', function() {
+        const workGroup = this.value;
+        const projectSelect = document.getElementById('project_filter');
+        
+        // Store current project selection
+        const currentProject = projectSelect.value;
+        
+        // Clear project options
+        projectSelect.innerHTML = '<option value="">ทุกโครงการ</option>';
+        
+        // Get all projects from PHP
+        const allProjects = <?= json_encode($allProjects) ?>;
+        
+        if (workGroup) {
+            // Filter projects by work group
+            const filteredProjects = allProjects.filter(project => project.work_group === workGroup);
+            
+            // Populate project dropdown with filtered projects
+            filteredProjects.forEach(project => {
+                const option = document.createElement('option');
+                option.value = project.id;
+                option.textContent = project.name;
+                if (project.id == currentProject) {
+                    option.selected = true;
+                }
+                projectSelect.appendChild(option);
+            });
+        } else {
+            // Show all projects if no work group selected
+            allProjects.forEach(project => {
+                const option = document.createElement('option');
+                option.value = project.id;
+                option.textContent = project.name;
+                if (project.id == currentProject) {
+                    option.selected = true;
+                }
+                projectSelect.appendChild(option);
+            });
+        }
 });
 
 // Export report function
