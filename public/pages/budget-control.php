@@ -472,20 +472,105 @@ $isDirectAccess = !isset($page);
 
 <!-- Transactions List -->
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">
-            <i class="bi bi-list me-2"></i>
-            รายการทั้งหมด (<?= number_format($totalTransactions) ?> รายการ)
-            <?php if ($totalTransactions > 0): ?>
-            <small class="text-muted ms-2">(แสดง <?= $startItem ?>-<?= $endItem ?> จาก <?= $totalTransactions ?> รายการ)</small>
-            <?php endif; ?>
-        </h5>
-        <div class="d-flex gap-2">
-            <button class="btn btn-success btn-sm" onclick="exportTransactions()">
-                <i class="bi bi-download me-1"></i>
-                ส่งออก Excel
-            </button>
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-list me-2"></i>
+                รายการทั้งหมด (<?= number_format($totalTransactions) ?> รายการ)
+                <?php if ($totalTransactions > 0): ?>
+                <small class="text-muted ms-2">(แสดง <?= $startItem ?>-<?= $endItem ?> จาก <?= $totalTransactions ?> รายการ)</small>
+                <?php endif; ?>
+            </h5>
+            <div class="d-flex gap-2">
+                <button class="btn btn-success btn-sm" onclick="exportTransactions()">
+                    <i class="bi bi-download me-1"></i>
+                    ส่งออก Excel
+                </button>
+            </div>
         </div>
+
+        <!-- Pagination Controls -->
+        <?php if ($totalTransactions > 0): ?>
+        <div class="card-footer bg-transparent border-top-0 pt-3 px-0 pb-0">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center">
+                        <label class="form-label me-2 mb-0">แสดงต่อหน้า:</label>
+                        <select class="form-select form-select-sm" style="width: auto;" onchange="changePerPage(this.value)">
+                            <?php foreach ($validPerPageOptions as $option): ?>
+                            <option value="<?= $option ?>" <?= $perPage === $option ? 'selected' : '' ?>>
+                                <?= $option ?> รายการ
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <?php if ($totalPages > 1): ?>
+                    <nav aria-label="Transaction pagination">
+                        <ul class="pagination pagination-sm justify-content-end mb-0">
+                            <!-- First Page -->
+                            <?php if ($currentPage > 1): ?>
+                            <li class="page-item">
+                                <a class="page-link" href="<?= buildPaginationUrl(1) ?>">
+                                    <i class="bi bi-chevron-double-left"></i>
+                                </a>
+                            </li>
+                            <?php endif; ?>
+                            
+                            <!-- Previous Page -->
+                            <?php if ($currentPage > 1): ?>
+                            <li class="page-item">
+                                <a class="page-link" href="<?= buildPaginationUrl($currentPage - 1) ?>">
+                                    <i class="bi bi-chevron-left"></i>
+                                </a>
+                            </li>
+                            <?php endif; ?>
+                            
+                            <!-- Page Numbers -->
+                            <?php
+                            $startPage = max(1, $currentPage - 2);
+                            $endPage = min($totalPages, $currentPage + 2);
+                            
+                            // Adjust range if we're near the beginning or end
+                            if ($endPage - $startPage < 4) {
+                                if ($startPage === 1) {
+                                    $endPage = min($totalPages, $startPage + 4);
+                                } else {
+                                    $startPage = max(1, $endPage - 4);
+                                }
+                            }
+                            
+                            for ($i = $startPage; $i <= $endPage; $i++): ?>
+                            <li class="page-item <?= $i === $currentPage ? 'active' : '' ?>">
+                                <a class="page-link" href="<?= buildPaginationUrl($i) ?>"><?= $i ?></a>
+                            </li>
+                            <?php endfor; ?>
+                            
+                            <!-- Next Page -->
+                            <?php if ($currentPage < $totalPages): ?>
+                            <li class="page-item">
+                                <a class="page-link" href="<?= buildPaginationUrl($currentPage + 1) ?>">
+                                    <i class="bi bi-chevron-right"></i>
+                                </a>
+                            </li>
+                            <?php endif; ?>
+                            
+                            <!-- Last Page -->
+                            <?php if ($currentPage < $totalPages): ?>
+                            <li class="page-item">
+                                <a class="page-link" href="<?= buildPaginationUrl($totalPages) ?>">
+                                    <i class="bi bi-chevron-double-right"></i>
+                                </a>
+                            </li>
+                            <?php endif; ?>
+                        </ul>
+                    </nav>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
     <div class="card-body">
         <?php if (empty($transactions)): ?>
@@ -578,87 +663,6 @@ $isDirectAccess = !isset($page);
         </div>
         
         <!-- Pagination Controls -->
-         <?php if ($totalTransactions > 0): ?>
-         <div class="card-footer bg-transparent border-top-0 pt-3">
-             <div class="row align-items-center">
-                 <div class="col-md-6">
-                     <div class="d-flex align-items-center">
-                         <label class="form-label me-2 mb-0">แสดงต่อหน้า:</label>
-                         <select class="form-select form-select-sm" style="width: auto;" onchange="changePerPage(this.value)">
-                             <?php foreach ($validPerPageOptions as $option): ?>
-                             <option value="<?= $option ?>" <?= $perPage === $option ? 'selected' : '' ?>>
-                                 <?= $option ?> รายการ
-                             </option>
-                             <?php endforeach; ?>
-                         </select>
-                     </div>
-                 </div>
-                 <div class="col-md-6">
-                     <?php if ($totalPages > 1): ?>
-                     <nav aria-label="Transaction pagination">
-                         <ul class="pagination pagination-sm justify-content-end mb-0">
-                             <!-- First Page -->
-                             <?php if ($currentPage > 1): ?>
-                             <li class="page-item">
-                                 <a class="page-link" href="<?= buildPaginationUrl(1) ?>">
-                                     <i class="bi bi-chevron-double-left"></i>
-                                 </a>
-                             </li>
-                             <?php endif; ?>
-                             
-                             <!-- Previous Page -->
-                             <?php if ($currentPage > 1): ?>
-                             <li class="page-item">
-                                 <a class="page-link" href="<?= buildPaginationUrl($currentPage - 1) ?>">
-                                     <i class="bi bi-chevron-left"></i>
-                                 </a>
-                             </li>
-                             <?php endif; ?>
-                             
-                             <!-- Page Numbers -->
-                             <?php
-                             $startPage = max(1, $currentPage - 2);
-                             $endPage = min($totalPages, $currentPage + 2);
-                             
-                             // Adjust range if we're near the beginning or end
-                             if ($endPage - $startPage < 4) {
-                                 if ($startPage === 1) {
-                                     $endPage = min($totalPages, $startPage + 4);
-                                 } else {
-                                     $startPage = max(1, $endPage - 4);
-                                 }
-                             }
-                             
-                             for ($i = $startPage; $i <= $endPage; $i++): ?>
-                             <li class="page-item <?= $i === $currentPage ? 'active' : '' ?>">
-                                 <a class="page-link" href="<?= buildPaginationUrl($i) ?>"><?= $i ?></a>
-                             </li>
-                             <?php endfor; ?>
-                             
-                             <!-- Next Page -->
-                             <?php if ($currentPage < $totalPages): ?>
-                             <li class="page-item">
-                                 <a class="page-link" href="<?= buildPaginationUrl($currentPage + 1) ?>">
-                                     <i class="bi bi-chevron-right"></i>
-                                 </a>
-                             </li>
-                             <?php endif; ?>
-                             
-                             <!-- Last Page -->
-                             <?php if ($currentPage < $totalPages): ?>
-                             <li class="page-item">
-                                 <a class="page-link" href="<?= buildPaginationUrl($totalPages) ?>">
-                                     <i class="bi bi-chevron-double-right"></i>
-                                 </a>
-                             </li>
-                             <?php endif; ?>
-                         </ul>
-                     </nav>
-                     <?php endif; ?>
-                 </div>
-             </div>
-         </div>
-         <?php endif; ?>
         <?php endif; ?>
     </div>
 </div>
