@@ -26,14 +26,39 @@ $hasSuccessMessage = isset($_GET['success']) || isset($_GET['updated']) || isset
 if (!isset($projectService)) {
     require_once __DIR__ . '/../../config/database.php';
     require_once __DIR__ . '/../../src/Services/ProjectService.php';
+    require_once __DIR__ . '/../../src/Services/FiscalYearService.php';
     $database = new Database();
     $db = $database->getConnection();
     $projectService = new ProjectService();
+    $fiscalYearService = new FiscalYearService();
+} else {
+    // If services already exist, ensure we have fiscalYearService
+    if (!isset($fiscalYearService)) {
+        require_once __DIR__ . '/../../src/Services/FiscalYearService.php';
+        $fiscalYearService = new FiscalYearService();
+    }
 }
 
 // Initialize current user if not available
 if (!isset($currentUser)) {
     $currentUser = ['id' => 1]; // Default for testing
+}
+
+// Ensure $yearLabel is set correctly based on configuration
+if (!isset($yearLabel)) {
+    // If not set globally (e.g. standalone test), fetch from settings
+    if (!class_exists('SettingsService')) {
+        require_once __DIR__ . '/../../src/Services/SettingsService.php';
+    }
+    $settingsService = new SettingsService();
+    $tempConfig = $settingsService->getSiteConfig();
+    $yearLabelType = $tempConfig['year_label_type'] ?? 'fiscal_year';
+    
+    switch ($yearLabelType) {
+        case 'academic_year': $yearLabel = 'ปีการศึกษา'; break;
+        case 'budget_year': $yearLabel = 'ปีบัญชี'; break;
+        case 'fiscal_year': default: $yearLabel = 'ปีงบประมาณ'; break;
+    }
 }
 
 // Handle form submissions
@@ -48,6 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $startDate = $_POST['start_date'] ?? '';
         $endDate = $_POST['end_date'] ?? '';
         $status = $_POST['status'] ?? 'active';
+        $fiscalYearId = $_POST['fiscal_year_id'] ?? '';
         $budgetCategories = $_POST['budget_categories'] ?? [];
         
         // Process budget categories
@@ -131,6 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'start_date' => $startDate,
                     'end_date' => $endDate,
                     'status' => $status,
+                    'fiscal_year_id' => $fiscalYearId,
                     'budget_categories' => $validCategories
                 ];
             }
@@ -198,6 +225,7 @@ if (isset($_GET['edit'])) {
 // Get filter parameters
 $filterWorkGroup = $_GET['filter_work_group'] ?? 'all';
 $filterStatus = $_GET['filter_status'] ?? 'all';
+$filterFiscalYear = $_GET['filter_fiscal_year'] ?? 'all';
 $searchTerm = trim($_GET['search_term'] ?? '');
 
 // Pagination parameters
@@ -211,7 +239,8 @@ if (!in_array($perPage, $validPerPageOptions)) {
 // Get all projects with filters
 $allProjects = $projectService->getAllProjects(
     $filterWorkGroup !== 'all' ? $filterWorkGroup : null,
-    $filterStatus !== 'all' ? $filterStatus : null
+    $filterStatus !== 'all' ? $filterStatus : null,
+    $filterFiscalYear !== 'all' ? $filterFiscalYear : null
 );
 
 // Apply search filter if provided
@@ -253,6 +282,11 @@ $budgetCategories = [];
 foreach ($budgetCategoriesData as $category) {
     $budgetCategories[$category['category_key']] = $category['category_name'];
 }
+
+// Get Fiscal Years
+$fiscalYears = $fiscalYearService->getAll();
+$activeFiscalYear = $fiscalYearService->getActiveYear();
+
 
 // Helper function to build pagination URLs
 function buildPaginationUrl($pageNum) {
@@ -334,6 +368,23 @@ function buildPaginationUrl($pageNum) {
             <input type="hidden" name="project_id" value="<?= $editProject['id'] ?>">
             <?php endif; ?>
             
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label for="fiscal_year_id" class="form-label"><?= $yearLabel ?> *</label>
+                    <select class="form-select" id="fiscal_year_id" name="fiscal_year_id" required 
+                            <?= ($editProject && $hasTransactions) ? 'disabled' : '' ?>>
+                        <option value="">เลือก<?= $yearLabel ?></option>
+                        <?php foreach ($fiscalYears as $fy): ?>
+                        <option value="<?= $fy['id'] ?>" 
+                            <?= ($editProject && $editProject['fiscal_year_id'] == $fy['id']) ? 'selected' : 
+                                (!$editProject && $activeFiscalYear && $activeFiscalYear['id'] == $fy['id'] ? 'selected' : '') ?>>
+                            <?= $fy['name'] ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="name" class="form-label">ชื่อโครงการ *</label>
@@ -504,7 +555,7 @@ function buildPaginationUrl($pageNum) {
                   <i class="bi bi-list me-2"></i>
                   รายการโครงการ (<?= $totalProjects ?> โครงการ)
                   <?php 
-                  $hasActiveFilters = $filterWorkGroup !== 'all' || $filterStatus !== 'all' || !empty($searchTerm);
+                  $hasActiveFilters = $filterWorkGroup !== 'all' || $filterStatus !== 'all' || $filterFiscalYear !== 'all' || !empty($searchTerm);
                   if ($hasActiveFilters): ?>
                   <span class="badge bg-primary ms-2">มีตัวกรองใช้งาน</span>
                   <?php endif; ?>
@@ -519,6 +570,7 @@ function buildPaginationUrl($pageNum) {
                  <span class="badge bg-primary ms-1"><?= 
                      ($filterWorkGroup !== 'all' ? 1 : 0) + 
                      ($filterStatus !== 'all' ? 1 : 0) + 
+                     ($filterFiscalYear !== 'all' ? 1 : 0) +
                      (!empty($searchTerm) ? 1 : 0) 
                  ?></span>
                  <?php endif; ?>
@@ -536,6 +588,18 @@ function buildPaginationUrl($pageNum) {
                            placeholder="ชื่อโครงการ, รายละเอียด, ผู้รับผิดชอบ" 
                            value="<?= htmlspecialchars($searchTerm) ?>">
                 </div>
+
+                <div class="col-md-2">
+                    <label for="filter_fiscal_year" class="form-label"><?= $yearLabel ?></label>
+                    <select class="form-select" id="filter_fiscal_year" name="filter_fiscal_year">
+                        <option value="all" <?= $filterFiscalYear === 'all' ? 'selected' : '' ?>>ทั้งหมด</option>
+                        <?php foreach ($fiscalYears as $fy): ?>
+                        <option value="<?= $fy['id'] ?>" <?= $filterFiscalYear == $fy['id'] ? 'selected' : '' ?>>
+                            <?= $fy['name'] ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
                 
                 <div class="col-md-3">
                     <label for="filter_work_group" class="form-label">กลุ่มงาน</label>
@@ -549,7 +613,7 @@ function buildPaginationUrl($pageNum) {
                     </select>
                 </div>
                 
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label for="filter_status" class="form-label">สถานะ</label>
                     <select class="form-select" id="filter_status" name="filter_status">
                         <option value="all" <?= $filterStatus === 'all' ? 'selected' : '' ?>>ทั้งหมด</option>
@@ -559,7 +623,7 @@ function buildPaginationUrl($pageNum) {
                     </select>
                 </div>
                 
-                <div class="col-md-3 d-flex align-items-end">
+                <div class="col-md-2 d-flex align-items-end">
                      <div class="btn-group w-100">
                          <button type="submit" class="btn btn-primary">
                              <i class="bi bi-search me-1"></i>
@@ -586,6 +650,12 @@ function buildPaginationUrl($pageNum) {
                              <?php endif; ?>
                              <?php if ($filterStatus !== 'all'): ?>
                              <span class="badge bg-secondary ms-1">สถานะ: <?= $filterStatus === 'active' ? 'ดำเนินการ' : ($filterStatus === 'completed' ? 'เสร็จสิ้น' : 'ระงับ') ?></span>
+                             <?php endif; ?>
+                             <?php if ($filterFiscalYear !== 'all'): 
+                                $fyName = '';
+                                foreach($fiscalYears as $fy) { if($fy['id'] == $filterFiscalYear) { $fyName = $fy['name']; break; } }
+                             ?>
+                             <span class="badge bg-secondary ms-1"><?= $yearLabel ?>: <?= $fyName ?></span>
                              <?php endif; ?>
                          </small>
                      </div>

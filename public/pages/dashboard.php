@@ -3,10 +3,23 @@
  * Dashboard Page - Overview of projects and budget status
  */
 
-// Get dashboard data
-$projects = $projectService->getAllProjects();
-$projectStats = $projectService->getProjectSummary();
-$transactionStats = $transactionService->getTransactionSummary();
+// Initialize services
+if (!isset($fiscalYearService)) {
+    require_once __DIR__ . '/../../src/Services/FiscalYearService.php';
+    $fiscalYearService = new FiscalYearService();
+}
+
+// Get Fiscal Years
+$fiscalYears = $fiscalYearService->getAll();
+$activeFiscalYear = $fiscalYearService->getActiveYear();
+
+// Determine which Fiscal Year to show
+$selectedFiscalYearId = $_GET['fiscal_year_id'] ?? ($activeFiscalYear ? $activeFiscalYear['id'] : null);
+
+// Get dashboard data filtered by Fiscal Year
+$projects = $projectService->getAllProjects(null, null, $selectedFiscalYearId);
+$projectStats = $projectService->getProjectSummary($selectedFiscalYearId);
+$transactionStats = $transactionService->getTransactionSummary(['fiscal_year_id' => $selectedFiscalYearId]);
 
 // Calculate totals
 $totalBudget = 0;
@@ -23,9 +36,26 @@ foreach ($projects as $project) {
     }
 }
 
-// Recent transactions
-$recentTransactions = $transactionService->getAllTransactions(null, null, 5, 0); // Get latest 5 transactions
+// Recent transactions (TODO: Filter by project's fiscal year if possible, but for now showing global recent)
+$recentTransactions = $transactionService->getAllTransactions(null, null, 5, 0, ['fiscal_year_id' => $selectedFiscalYearId]); // Get latest 5 transactions filtered by fiscal year
 ?>
+
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3">
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <form id="fiscalYearForm" method="GET" class="d-flex align-items-center">
+            <input type="hidden" name="page" value="dashboard">
+            <label for="fiscal_year_select" class="me-2 text-nowrap"><?= $yearLabel ?>:</label>
+            <select id="fiscal_year_select" name="fiscal_year_id" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">ทั้งหมด</option>
+                <?php foreach ($fiscalYears as $fy): ?>
+                <option value="<?= $fy['id'] ?>" <?= $selectedFiscalYearId == $fy['id'] ? 'selected' : '' ?>>
+                    <?= $fy['name'] . ($fy['is_active'] ? ' (ปัจจุบัน)' : '') ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+        </form>
+    </div>
+</div>
 
 <div class="row">
     <!-- Summary Cards -->

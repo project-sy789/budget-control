@@ -15,12 +15,11 @@ class SessionManager {
         $this->db = new Database();
         $this->conn = $this->db->getConnection();
         
-        // Configure session settings
-        ini_set('session.cookie_httponly', 1);
-        ini_set('session.use_only_cookies', 1);
-        ini_set('session.cookie_secure', isset($_SERVER['HTTPS']));
-        
+        // Configure session settings only if session hasn't started
         if (session_status() === PHP_SESSION_NONE) {
+            ini_set('session.cookie_httponly', 1);
+            ini_set('session.use_only_cookies', 1);
+            ini_set('session.cookie_secure', isset($_SERVER['HTTPS']));
             session_start();
         }
     }

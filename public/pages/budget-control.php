@@ -14,6 +14,8 @@ if (!isset($projectService)) {
     require_once __DIR__ . '/../../src/Services/ProjectService.php';
     require_once __DIR__ . '/../../src/Services/TransactionService.php';
     
+    require_once __DIR__ . '/../../src/Services/FiscalYearService.php';
+    
     // Initialize database connection
     $database = new Database();
     $db = $database->getConnection();
@@ -23,6 +25,7 @@ if (!isset($projectService)) {
     $authService = new AuthService();
     $projectService = new ProjectService();
     $transactionService = new TransactionService();
+    $fiscalYearService = new FiscalYearService();
     
     // Services create their own database connections in constructors
     // No need to set connections manually
@@ -34,10 +37,17 @@ if (!isset($projectService)) {
     if ($isLoggedIn) {
         $userId = $sessionManager->getCurrentUserId();
         $currentUser = $authService->getUserById($userId);
+
     } else {
         // Redirect to login if not logged in
         header('Location: ../index.php?page=login');
         exit;
+    }
+} else {
+    // If services already exist, ensure we have fiscalYearService
+    if (!isset($fiscalYearService)) {
+        require_once __DIR__ . '/../../src/Services/FiscalYearService.php';
+        $fiscalYearService = new FiscalYearService();
     }
 }
 
@@ -134,12 +144,24 @@ $projectFilter = intval($_GET['project_filter'] ?? 0);
 $typeFilter = $_GET['type_filter'] ?? '';
 $dateFrom = $_GET['date_from'] ?? '';
 $dateTo = $_GET['date_to'] ?? '';
+
+// Get Fiscal Years
+$fiscalYears = $fiscalYearService->getAll();
+$activeFiscalYear = $fiscalYearService->getActiveYear();
+$fiscalYearFilter = $_GET['fiscal_year_filter'] ?? ($activeFiscalYear ? $activeFiscalYear['id'] : null);
+
 $perPage = 20;
+
+// Get projects for dropdown (filtered by fiscal year)
+$projects = $projectService->getAllProjects(null, null, $fiscalYearFilter);
 
 // Build filters
 $filters = [];
 if ($projectFilter > 0) {
     $filters['project_id'] = $projectFilter;
+}
+if (!empty($fiscalYearFilter)) {
+    $filters['fiscal_year_id'] = $fiscalYearFilter;
 }
 if (!empty($typeFilter)) {
     $filters['type'] = $typeFilter;
@@ -155,9 +177,6 @@ if (!empty($dateTo)) {
 $transactions = $transactionService->getAllTransactions($projectFilter > 0 ? $projectFilter : null, null, $perPage, ($currentPage - 1) * $perPage, $filters);
 $totalTransactions = $transactionService->getTransactionsCount($projectFilter > 0 ? $projectFilter : null, null, $filters);
 $totalPages = ceil($totalTransactions / $perPage);
-
-// Get projects for dropdown
-$projects = $projectService->getAllProjects();
 
 // Define work groups
 $workGroups = [
@@ -355,6 +374,18 @@ $isDirectAccess = !isset($page);
             <input type="hidden" name="page" value="budget-control">
             
             <div class="col-md-3">
+                <label for="fiscal_year_filter" class="form-label"><?= $yearLabel ?></label>
+                <select class="form-select" id="fiscal_year_filter" name="fiscal_year_filter" onchange="this.form.submit()">
+                    <option value="">ทั้งหมด</option>
+                    <?php foreach ($fiscalYears as $fy): ?>
+                    <option value="<?= $fy['id'] ?>" <?= $fiscalYearFilter == $fy['id'] ? 'selected' : '' ?>>
+                        <?= $fy['name'] . ($fy['is_active'] ? ' (ปัจจุบัน)' : '') ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            
+            <div class="col-md-3">
                 <label for="project_filter" class="form-label">โครงการ</label>
                 <select class="form-select" id="project_filter" name="project_filter">
                     <option value="">ทุกโครงการ</option>
@@ -424,9 +455,9 @@ $isDirectAccess = !isset($page);
             <p class="text-muted mt-2">ไม่พบรายการ</p>
         </div>
         <?php else: ?>
-        <div class="table-responsive">
-            <table class="table table-hover">
-                <thead>
+        <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+            <table class="table table-hover mb-0">
+                <thead class="position-sticky top-0 bg-white" style="z-index: 1;">
                     <tr>
                         <th>วันที่</th>
                         <th>โครงการ</th>
@@ -513,7 +544,7 @@ $isDirectAccess = !isset($page);
             <ul class="pagination justify-content-center">
                 <?php if ($currentPage > 1): ?>
                 <li class="page-item">
-                    <a class="page-link" href="?page=budget-control&page_num=<?= $currentPage - 1 ?><?= $projectFilter ? '&project_filter=' . $projectFilter : '' ?><?= $typeFilter ? '&type_filter=' . $typeFilter : '' ?><?= $dateFrom ? '&date_from=' . $dateFrom : '' ?><?= $dateTo ? '&date_to=' . $dateTo : '' ?>">
+                    <a class="page-link" href="?page=budget-control&page_num=<?= $currentPage - 1 ?><?= $projectFilter ? '&project_filter=' . $projectFilter : '' ?><?= $typeFilter ? '&type_filter=' . $typeFilter : '' ?><?= $dateFrom ? '&date_from=' . $dateFrom : '' ?><?= $dateTo ? '&date_to=' . $dateTo : '' ?><?= $fiscalYearFilter ? '&fiscal_year_filter=' . $fiscalYearFilter : '' ?>">
                         ก่อนหน้า
                     </a>
                 </li>
@@ -521,7 +552,7 @@ $isDirectAccess = !isset($page);
                 
                 <?php for ($i = max(1, $currentPage - 2); $i <= min($totalPages, $currentPage + 2); $i++): ?>
                 <li class="page-item <?= $i === $currentPage ? 'active' : '' ?>">
-                    <a class="page-link" href="?page=budget-control&page_num=<?= $i ?><?= $projectFilter ? '&project_filter=' . $projectFilter : '' ?><?= $typeFilter ? '&type_filter=' . $typeFilter : '' ?><?= $dateFrom ? '&date_from=' . $dateFrom : '' ?><?= $dateTo ? '&date_to=' . $dateTo : '' ?>">
+                    <a class="page-link" href="?page=budget-control&page_num=<?= $i ?><?= $projectFilter ? '&project_filter=' . $projectFilter : '' ?><?= $typeFilter ? '&type_filter=' . $typeFilter : '' ?><?= $dateFrom ? '&date_from=' . $dateFrom : '' ?><?= $dateTo ? '&date_to=' . $dateTo : '' ?><?= $fiscalYearFilter ? '&fiscal_year_filter=' . $fiscalYearFilter : '' ?>">
                         <?= $i ?>
                     </a>
                 </li>
@@ -529,7 +560,7 @@ $isDirectAccess = !isset($page);
                 
                 <?php if ($currentPage < $totalPages): ?>
                 <li class="page-item">
-                    <a class="page-link" href="?page=budget-control&page_num=<?= $currentPage + 1 ?><?= $projectFilter ? '&project_filter=' . $projectFilter : '' ?><?= $typeFilter ? '&type_filter=' . $typeFilter : '' ?><?= $dateFrom ? '&date_from=' . $dateFrom : '' ?><?= $dateTo ? '&date_to=' . $dateTo : '' ?>">
+                    <a class="page-link" href="?page=budget-control&page_num=<?= $currentPage + 1 ?><?= $projectFilter ? '&project_filter=' . $projectFilter : '' ?><?= $typeFilter ? '&type_filter=' . $typeFilter : '' ?><?= $dateFrom ? '&date_from=' . $dateFrom : '' ?><?= $dateTo ? '&date_to=' . $dateTo : '' ?><?= $fiscalYearFilter ? '&fiscal_year_filter=' . $fiscalYearFilter : '' ?>">
                         ถัดไป
                     </a>
                 </li>

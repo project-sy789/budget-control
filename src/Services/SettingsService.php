@@ -98,7 +98,8 @@ class SettingsService {
             'organization_name' => $settings['organization_name']['setting_value'] ?? 'โรงเรียนซับใหญ่วิทยาคม',
             'site_title' => $settings['site_title']['setting_value'] ?? 'ระบบควบคุมงบประมาณ - โรงเรียนซับใหญ่วิทยาคม',
             'site_icon' => $settings['site_icon']['setting_value'] ?? '',
-            'enable_pwa' => ($settings['enable_pwa']['setting_value'] ?? '1') === '1'
+            'enable_pwa' => ($settings['enable_pwa']['setting_value'] ?? '1') === '1',
+            'year_label_type' => $settings['year_label_type']['setting_value'] ?? 'fiscal_year' // fiscal_year, academic_year, budget_year
         ];
     }
     

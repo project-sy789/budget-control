@@ -3,16 +3,42 @@
  * Budget Summary Page - Reports and Analysis
  */
 
+// Initialize FiscalYearService
+require_once __DIR__ . '/../../src/Services/FiscalYearService.php';
+$fiscalYearService = new FiscalYearService();
+$fiscalYears = $fiscalYearService->getAll();
+$activeFiscalYear = $fiscalYearService->getActiveYear();
+
 // Get filter parameters
+$fiscalYearFilter = $_GET['fiscal_year_filter'] ?? ($activeFiscalYear ? $activeFiscalYear['id'] : null);
 $projectFilter = intval($_GET['project_filter'] ?? 0);
-$dateFrom = $_GET['date_from'] ?? date('Y-01-01'); // Start of current year
-$dateTo = $_GET['date_to'] ?? date('Y-m-d'); // Today
 $workGroupFilter = $_GET['work_group_filter'] ?? '';
+
+// Determine default dates based on fiscal year
+$defaultDateFrom = date('Y-01-01');
+$defaultDateTo = date('Y-12-31');
+
+if (!empty($fiscalYearFilter)) {
+    // Find selected fiscal year dates
+    foreach ($fiscalYears as $fy) {
+        if ($fy['id'] == $fiscalYearFilter) {
+            $defaultDateFrom = $fy['start_date'];
+            $defaultDateTo = $fy['end_date'];
+            break;
+        }
+    }
+}
+
+$dateFrom = $_GET['date_from'] ?? $defaultDateFrom;
+$dateTo = $_GET['date_to'] ?? $defaultDateTo;
 
 // Build filters
 $filters = [];
 if ($projectFilter > 0) {
     $filters['project_id'] = $projectFilter;
+}
+if (!empty($fiscalYearFilter)) {
+    $filters['fiscal_year_id'] = $fiscalYearFilter;
 }
 if (!empty($dateFrom)) {
     $filters['date_from'] = $dateFrom;
@@ -21,10 +47,10 @@ if (!empty($dateTo)) {
     $filters['date_to'] = $dateTo;
 }
 
-// Get data
-$allProjects = $projectService->getAllProjects();
+// Get data (filtered by fiscal year)
+$allProjects = $projectService->getAllProjects(null, null, $fiscalYearFilter);
 $transactionStats = $transactionService->getTransactionSummary($filters);
-$projectSummary = $projectService->getProjectSummary();
+$projectSummary = $projectService->getProjectSummary($fiscalYearFilter);
 
 // Get dynamic budget categories from CategoryService
 require_once '../src/Services/CategoryService.php';
@@ -160,6 +186,18 @@ foreach ($budgetCategoriesData as $category) {
             <input type="hidden" name="page" value="budget-summary">
             
             <div class="col-md-2">
+                <label for="fiscal_year_filter" class="form-label"><?= $yearLabel ?></label>
+                <select class="form-select" id="fiscal_year_filter" name="fiscal_year_filter" onchange="this.form.submit()">
+                    <option value="">ทั้งหมด</option>
+                    <?php foreach ($fiscalYears as $fy): ?>
+                    <option value="<?= $fy['id'] ?>" <?= $fiscalYearFilter == $fy['id'] ? 'selected' : '' ?>>
+                        <?= $fy['name'] . ($fy['is_active'] ? ' (ปัจจุบัน)' : '') ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            
+            <div class="col-md-2">
                 <label for="work_group_filter" class="form-label">กลุ่มงาน</label>
                 <select class="form-select" id="work_group_filter" name="work_group_filter">
                     <option value="">ทุกกลุ่มงาน</option>
@@ -171,7 +209,7 @@ foreach ($budgetCategoriesData as $category) {
                 </select>
             </div>
             
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label for="project_filter" class="form-label">โครงการ</label>
                 <select class="form-select" id="project_filter" name="project_filter">
                     <option value="">ทุกโครงการ</option>

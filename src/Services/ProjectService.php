@@ -18,7 +18,7 @@ class ProjectService {
     /**
      * Get all projects with optional filters
      */
-    public function getAllProjects($workGroup = null, $status = null) {
+    public function getAllProjects($workGroup = null, $status = null, $fiscalYearId = null) {
         try {
             $query = "SELECT p.*, u.display_name as created_by_name 
                      FROM projects p 
@@ -35,6 +35,11 @@ class ProjectService {
             if ($status && $status !== 'all') {
                 $query .= " AND p.status = :status";
                 $params[':status'] = $status;
+            }
+
+            if ($fiscalYearId && $fiscalYearId !== 'all') {
+                $query .= " AND p.fiscal_year_id = :fiscal_year_id";
+                $params[':fiscal_year_id'] = $fiscalYearId;
             }
             
             $query .= " ORDER BY p.created_at DESC";
@@ -106,6 +111,7 @@ class ProjectService {
             $query = "SELECT p.*, u.display_name as created_by_name 
                      FROM projects p 
                      LEFT JOIN users u ON p.created_by = u.id 
+                     LEFT JOIN fiscal_years fy ON p.fiscal_year_id = fy.id
                      WHERE p.id = :project_id";
             
             $stmt = $this->conn->prepare($query);
@@ -176,8 +182,8 @@ class ProjectService {
             $sanitizedData = $this->sanitizeProjectData($projectData);
             
             // Insert project
-            $query = "INSERT INTO projects (name, budget, work_group, responsible_person, description, start_date, end_date, status, created_by) 
-                     VALUES (:name, :budget, :work_group, :responsible_person, :description, :start_date, :end_date, :status, :created_by)";
+            $query = "INSERT INTO projects (fiscal_year_id, name, budget, work_group, responsible_person, description, start_date, end_date, status, created_by) 
+                     VALUES (:fiscal_year_id, :name, :budget, :work_group, :responsible_person, :description, :start_date, :end_date, :status, :created_by)";
             
             // Debug: Log the budget value being inserted
             error_log("ProjectService DEBUG - Budget value type: " . gettype($sanitizedData['budget']));
@@ -185,6 +191,7 @@ class ProjectService {
             error_log("ProjectService DEBUG - Budget as float: " . floatval($sanitizedData['budget']));
             
             $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(':fiscal_year_id', $sanitizedData['fiscal_year_id']);
             $stmt->bindParam(':name', $sanitizedData['name']);
             // Ensure budget is properly cast to float
             $budgetValue = floatval($sanitizedData['budget']);
@@ -266,6 +273,7 @@ class ProjectService {
             } else {
                 // Update all fields
                 $query = "UPDATE projects SET 
+                         fiscal_year_id = :fiscal_year_id,
                          name = :name, 
                          budget = :budget, 
                          work_group = :work_group, 
@@ -277,6 +285,7 @@ class ProjectService {
                          WHERE id = :project_id";
                 
                 $stmt = $this->conn->prepare($query);
+                $stmt->bindParam(':fiscal_year_id', $sanitizedData['fiscal_year_id']);
                 $stmt->bindParam(':name', $sanitizedData['name']);
                 $stmt->bindParam(':budget', $sanitizedData['budget']);
                 $stmt->bindParam(':work_group', $sanitizedData['work_group']);
@@ -549,7 +558,7 @@ class ProjectService {
     /**
      * Get project summary statistics
      */
-    public function getProjectSummary() {
+    public function getProjectSummary($fiscalYearId = null) {
         try {
             $query = "SELECT 
                         COUNT(*) as total_projects,
@@ -558,7 +567,16 @@ class ProjectService {
                         SUM(budget) as total_budget
                      FROM projects";
             
+            $params = [];
+            if ($fiscalYearId && $fiscalYearId !== 'all') {
+                $query .= " WHERE fiscal_year_id = :fiscal_year_id";
+                $params[':fiscal_year_id'] = $fiscalYearId;
+            }
+            
             $stmt = $this->conn->prepare($query);
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value);
+            }
             $stmt->execute();
             
             return $stmt->fetch();
@@ -601,6 +619,11 @@ class ProjectService {
         
         if (!empty($projectData['description']) && strlen($projectData['description']) > 1000) {
             throw new Exception('คำอธิบายต้องไม่เกิน 1000 ตัวอักษร');
+        }
+
+        // Fiscal Year validation
+        if (empty($projectData['fiscal_year_id'])) {
+            throw new Exception('กรุณาเลือกปี');
         }
         
         // Date validation
@@ -677,6 +700,11 @@ class ProjectService {
         // Sanitize status
         if (isset($projectData['status'])) {
             $sanitized['status'] = trim($projectData['status']);
+        }
+
+        // Sanitize fiscal_year_id
+        if (isset($projectData['fiscal_year_id'])) {
+            $sanitized['fiscal_year_id'] = intval($projectData['fiscal_year_id']);
         }
         
         // Sanitize created_by

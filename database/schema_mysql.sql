@@ -20,9 +20,21 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+-- Fiscal Years table
+CREATE TABLE fiscal_years (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE COMMENT 'Fiscal Year Name e.g. 2567',
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    is_active BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 -- Projects table
 CREATE TABLE projects (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    fiscal_year_id INT,
     name VARCHAR(255) NOT NULL,
     budget DECIMAL(15,2) NOT NULL DEFAULT 0.00,
     work_group ENUM('academic', 'budget', 'hr', 'general', 'other') NOT NULL,
@@ -35,6 +47,7 @@ CREATE TABLE projects (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (fiscal_year_id) REFERENCES fiscal_years(id) ON DELETE SET NULL,
     INDEX idx_work_group (work_group),
     INDEX idx_status (status),
     INDEX idx_dates (start_date, end_date)

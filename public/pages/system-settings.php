@@ -25,7 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'site_name' => trim($_POST['site_name'] ?? ''),
                     'organization_name' => trim($_POST['organization_name'] ?? ''),
                     'site_title' => trim($_POST['site_title'] ?? ''),
-                    'enable_pwa' => isset($_POST['enable_pwa']) ? '1' : '0'
+                    'enable_pwa' => isset($_POST['enable_pwa']) ? '1' : '0',
+                    'year_label_type' => $_POST['year_label_type'] ?? 'fiscal_year'
                 ];
                 
                 if ($settingsService->updateSettings($settings)) {
@@ -133,6 +134,19 @@ $siteConfig = $settingsService->getSiteConfig();
                                    required>
                         </div>
                         
+                        <div class="mb-3">
+                            <label for="year_label_type" class="form-label">
+                                <i class="bi bi-calendar-event me-1"></i>
+                                รูปแบบชื่อปีที่ใช้เรียก
+                            </label>
+                            <select class="form-select" id="year_label_type" name="year_label_type">
+                                <option value="fiscal_year" <?= ($siteConfig['year_label_type'] ?? 'fiscal_year') === 'fiscal_year' ? 'selected' : '' ?>>ปีงบประมาณ</option>
+                                <option value="academic_year" <?= ($siteConfig['year_label_type'] ?? '') === 'academic_year' ? 'selected' : '' ?>>ปีการศึกษา</option>
+                                <option value="budget_year" <?= ($siteConfig['year_label_type'] ?? '') === 'budget_year' ? 'selected' : '' ?>>ปีบัญชี</option>
+                            </select>
+                            <div class="form-text">เลือกรูปแบบการเรียกชื่อปีที่จะแสดงทั่วทั้งระบบ</div>
+                        </div>
+
                         <div class="mb-3">
                             <div class="form-check">
                                 <input class="form-check-input" 

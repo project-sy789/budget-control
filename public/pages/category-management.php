@@ -81,12 +81,7 @@ if (isset($_GET['edit'])) {
 $categories = $categoryService->getAllCategories();
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>
-        <i class="bi bi-tags me-2"></i>
-        จัดการหมวดหมู่งบประมาณ
-    </h2>
-</div>
+
 
 <!-- Alert Messages -->
 <?php if ($error): ?>

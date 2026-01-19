@@ -8,7 +8,7 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-session_start();
+// Session will be started by SessionManager later
 
 // Include required files
 require_once __DIR__ . '/../config/database.php';
@@ -31,6 +31,15 @@ $settingsService = new SettingsService();
 
 // Get site configuration
 $siteConfig = $settingsService->getSiteConfig();
+
+// Determine Year Label
+$yearLabelType = $siteConfig['year_label_type'] ?? 'fiscal_year';
+$yearLabel = 'ปีงบประมาณ';
+switch ($yearLabelType) {
+    case 'academic_year': $yearLabel = 'ปีการศึกษา'; break;
+    case 'budget_year': $yearLabel = 'ปีบัญชี'; break;
+    case 'fiscal_year': default: $yearLabel = 'ปีงบประมาณ'; break;
+}
 
 // Check if user is logged in
 $isLoggedIn = $sessionManager->isLoggedIn();
@@ -369,6 +378,12 @@ if (rand(1, 100) === 1) {
                                 การตั้งค่าระบบ
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link <?= $page === 'fiscal-years' ? 'active' : '' ?>" href="?page=fiscal-years">
+                                <i class="bi bi-calendar-event me-2"></i>
+                                จัดการ<?= $yearLabel ?>
+                            </a>
+                        </li>
                         <?php endif; ?>
                     </ul>
                     
@@ -406,6 +421,8 @@ if (rand(1, 100) === 1) {
                             case 'category-management': echo 'จัดการหมวดหมู่'; break;
                             case 'user-management': echo 'จัดการผู้ใช้'; break;
                             case 'system-settings': echo 'การตั้งค่าระบบ'; break;
+                            case 'system-settings': echo 'การตั้งค่าระบบ'; break;
+                            case 'fiscal-years': echo 'จัดการ' . $yearLabel; break;
                             case 'profile': echo 'โปรไฟล์'; break;
                             default: echo 'ระบบควบคุมงบประมาณ';
                         }
@@ -451,6 +468,13 @@ if (rand(1, 100) === 1) {
                         case 'system-settings':
                             if ($currentUser && $currentUser['role'] === 'admin') {
                                 include 'pages/system-settings.php';
+                            } else {
+                                echo '<div class="alert alert-danger">คุณไม่มีสิทธิ์เข้าถึงหน้านี้</div>';
+                            }
+                            break;
+                        case 'fiscal-years':
+                            if ($currentUser && $currentUser['role'] === 'admin') {
+                                include 'pages/fiscal-years.php';
                             } else {
                                 echo '<div class="alert alert-danger">คุณไม่มีสิทธิ์เข้าถึงหน้านี้</div>';
                             }

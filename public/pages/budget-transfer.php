@@ -13,6 +13,7 @@ if (!isset($projectService)) {
     require_once __DIR__ . '/../../src/Auth/AuthService.php';
     require_once __DIR__ . '/../../src/Services/ProjectService.php';
     require_once __DIR__ . '/../../src/Services/TransactionService.php';
+    require_once __DIR__ . '/../../src/Services/FiscalYearService.php';
     
     // Initialize database connection
     $database = new Database();
@@ -22,7 +23,9 @@ if (!isset($projectService)) {
     $sessionManager = new SessionManager();
     $authService = new AuthService();
     $projectService = new ProjectService();
+
     $transactionService = new TransactionService();
+    $fiscalYearService = new FiscalYearService();
     
     // Check if user is logged in
     $isLoggedIn = $sessionManager->isLoggedIn();
@@ -40,6 +43,12 @@ if (!isset($projectService)) {
     $isDirectAccess = true;
 } else {
     $isDirectAccess = false;
+    
+    // Ensure fiscalYearService is available if included
+    if (!isset($fiscalYearService)) {
+        require_once __DIR__ . '/../../src/Services/FiscalYearService.php';
+        $fiscalYearService = new FiscalYearService();
+    }
 }
 
 $message = '';
@@ -96,8 +105,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// Get projects for dropdown
-$projects = $projectService->getAllProjects(null, 'active');
+// Get all fiscal years
+$fiscalYears = $fiscalYearService->getAll();
+$activeFiscalYear = $fiscalYearService->getActiveYear();
+
+// Determine selected fiscal year
+$selectedFiscalYearId = $_GET['fiscal_year_id'] ?? ($activeFiscalYear ? $activeFiscalYear['id'] : null);
+
+// Get projects for dropdown (filtered by selected fiscal year)
+$projects = $projectService->getAllProjects(null, 'active', $selectedFiscalYearId);
 
 // Get dynamic budget categories from CategoryService
 require_once '../src/Services/CategoryService.php';
@@ -160,6 +176,23 @@ $recentTransfers = $transactionService->getTransferHistory(10, 0);
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 <?php endif; ?>
+
+<!-- Filters -->
+<div class="d-flex justify-content-end flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3">
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <form method="GET" class="d-flex align-items-center">
+            <input type="hidden" name="page" value="budget-transfer">
+            <label for="fiscal_year_id" class="me-2 text-nowrap"><?= isset($yearLabel) ? $yearLabel : 'ปีงบประมาณ' ?>:</label>
+            <select class="form-select form-select-sm" id="fiscal_year_id" name="fiscal_year_id" onchange="this.form.submit()">
+                <?php foreach ($fiscalYears as $fy): ?>
+                <option value="<?= $fy['id'] ?>" <?= $selectedFiscalYearId == $fy['id'] ? 'selected' : '' ?>>
+                    <?= $fy['name'] ?> <?= $fy['is_active'] ? '(ปัจจุบัน)' : '' ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+        </form>
+    </div>
+</div>
 
 <div class="row">
     <!-- Transfer Form -->

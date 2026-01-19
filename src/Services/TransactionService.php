@@ -61,6 +61,11 @@ class TransactionService {
                     $query .= " AND t.transaction_date <= :date_to";
                     $params[':date_to'] = $filters['date_to'];
                 }
+
+                if (isset($filters['fiscal_year_id']) && !empty($filters['fiscal_year_id'])) {
+                    $query .= " AND p.fiscal_year_id = :fiscal_year_id";
+                    $params[':fiscal_year_id'] = $filters['fiscal_year_id'];
+                }
             }
             
             $query .= " ORDER BY t.transaction_date DESC, t.created_at DESC";
@@ -478,7 +483,8 @@ class TransactionService {
                         COUNT(CASE WHEN transaction_type IN ('transfer_in', 'transfer_out') THEN 1 END) as transfer_transactions,
                         COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END), 0) as total_income,
                         COALESCE(SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END), 0) as total_expense
-                     FROM transactions";
+                     FROM transactions t
+                     LEFT JOIN projects p ON t.project_id = p.id";
             
             $params = [];
             $whereConditions = [];
@@ -500,8 +506,13 @@ class TransactionService {
                 }
                 
                 if (isset($filters['date_to']) && !empty($filters['date_to'])) {
-                    $whereConditions[] = "transaction_date <= :date_to";
+                    $whereConditions[] = "t.transaction_date <= :date_to";
                     $params[':date_to'] = $filters['date_to'];
+                }
+
+                if (isset($filters['fiscal_year_id']) && !empty($filters['fiscal_year_id'])) {
+                    $whereConditions[] = "p.fiscal_year_id = :fiscal_year_id";
+                    $params[':fiscal_year_id'] = $filters['fiscal_year_id'];
                 }
             }
             
@@ -535,7 +546,10 @@ class TransactionService {
      */
     public function getTransactionsCount($projectId = null, $category = null, $filters = []) {
         try {
-            $query = "SELECT COUNT(*) as count FROM transactions t LEFT JOIN category_types ct ON t.category_type_id = ct.id WHERE 1=1";
+            $query = "SELECT COUNT(*) as count FROM transactions t 
+                      LEFT JOIN category_types ct ON t.category_type_id = ct.id 
+                      LEFT JOIN projects p ON t.project_id = p.id
+                      WHERE 1=1";
             $params = [];
             
             if ($projectId) {
@@ -567,6 +581,11 @@ class TransactionService {
                 if (isset($filters['date_to']) && !empty($filters['date_to'])) {
                     $query .= " AND t.transaction_date <= :date_to";
                     $params[':date_to'] = $filters['date_to'];
+                }
+
+                if (isset($filters['fiscal_year_id']) && !empty($filters['fiscal_year_id'])) {
+                    $query .= " AND p.fiscal_year_id = :fiscal_year_id";
+                    $params[':fiscal_year_id'] = $filters['fiscal_year_id'];
                 }
             }
             
