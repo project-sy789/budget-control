@@ -150,7 +150,20 @@ $fiscalYears = $fiscalYearService->getAll();
 $activeFiscalYear = $fiscalYearService->getActiveYear();
 $fiscalYearFilter = $_GET['fiscal_year_filter'] ?? ($activeFiscalYear ? $activeFiscalYear['id'] : null);
 
-$perPage = 20;
+// Pagination parameters
+$perPage = intval($_GET['per_page'] ?? 20);
+$validPerPageOptions = [10, 20, 50, 100];
+if (!in_array($perPage, $validPerPageOptions)) {
+    $perPage = 20;
+}
+
+// Helper function to build pagination URLs
+function buildPaginationUrl($pageNum) {
+    $params = $_GET;
+    $params['page'] = 'budget-control';
+    $params['page_num'] = $pageNum;
+    return '?' . http_build_query($params);
+}
 
 // Get projects for dropdown (filtered by fiscal year)
 $projects = $projectService->getAllProjects(null, null, $fiscalYearFilter);
@@ -177,6 +190,10 @@ if (!empty($dateTo)) {
 $transactions = $transactionService->getAllTransactions($projectFilter > 0 ? $projectFilter : null, null, $perPage, ($currentPage - 1) * $perPage, $filters);
 $totalTransactions = $transactionService->getTransactionsCount($projectFilter > 0 ? $projectFilter : null, null, $filters);
 $totalPages = ceil($totalTransactions / $perPage);
+
+// Pagination info
+$startItem = $totalTransactions > 0 ? (($currentPage - 1) * $perPage) + 1 : 0;
+$endItem = min($currentPage * $perPage, $totalTransactions);
 
 // Define work groups
 $workGroups = [
@@ -216,6 +233,14 @@ $isDirectAccess = !isset($page);
     <title>ควบคุมงบประมาณ - Budget Control System</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script>
+    function changePerPage(value) {
+        const urlParams = new URLSearchParams(window.location.search);
+        urlParams.set('per_page', value);
+        urlParams.set('page_num', 1); // Reset to first page
+        window.location.search = urlParams.toString();
+    }
+    </script>
 </head>
 <body>
     <div class="container-fluid">
@@ -240,6 +265,16 @@ $isDirectAccess = !isset($page);
                     </div>
                 </nav>
                 <div class="container">
+<?php else: ?>
+    <!-- Enable changePerPage script if included via index.php -->
+    <script>
+    function changePerPage(value) {
+        const urlParams = new URLSearchParams(window.location.search);
+        urlParams.set('per_page', value);
+        urlParams.set('page_num', 1); // Reset to first page
+        window.location.search = urlParams.toString();
+    }
+    </script>
 <?php endif; ?>
 
 <!-- Alert Messages -->
@@ -372,6 +407,7 @@ $isDirectAccess = !isset($page);
     <div class="card-body">
         <form method="GET" class="row g-3">
             <input type="hidden" name="page" value="budget-control">
+            <input type="hidden" name="per_page" value="<?= $perPage ?>">
             
             <div class="col-md-3">
                 <label for="fiscal_year_filter" class="form-label"><?= $yearLabel ?></label>
@@ -440,6 +476,9 @@ $isDirectAccess = !isset($page);
         <h5 class="mb-0">
             <i class="bi bi-list me-2"></i>
             รายการทั้งหมด (<?= number_format($totalTransactions) ?> รายการ)
+            <?php if ($totalTransactions > 0): ?>
+            <small class="text-muted ms-2">(แสดง <?= $startItem ?>-<?= $endItem ?> จาก <?= $totalTransactions ?> รายการ)</small>
+            <?php endif; ?>
         </h5>
         <div class="d-flex gap-2">
             <button class="btn btn-success btn-sm" onclick="exportTransactions()">
@@ -538,36 +577,88 @@ $isDirectAccess = !isset($page);
             </table>
         </div>
         
-        <!-- Pagination -->
-        <?php if ($totalPages > 1): ?>
-        <nav aria-label="Page navigation">
-            <ul class="pagination justify-content-center">
-                <?php if ($currentPage > 1): ?>
-                <li class="page-item">
-                    <a class="page-link" href="?page=budget-control&page_num=<?= $currentPage - 1 ?><?= $projectFilter ? '&project_filter=' . $projectFilter : '' ?><?= $typeFilter ? '&type_filter=' . $typeFilter : '' ?><?= $dateFrom ? '&date_from=' . $dateFrom : '' ?><?= $dateTo ? '&date_to=' . $dateTo : '' ?><?= $fiscalYearFilter ? '&fiscal_year_filter=' . $fiscalYearFilter : '' ?>">
-                        ก่อนหน้า
-                    </a>
-                </li>
-                <?php endif; ?>
-                
-                <?php for ($i = max(1, $currentPage - 2); $i <= min($totalPages, $currentPage + 2); $i++): ?>
-                <li class="page-item <?= $i === $currentPage ? 'active' : '' ?>">
-                    <a class="page-link" href="?page=budget-control&page_num=<?= $i ?><?= $projectFilter ? '&project_filter=' . $projectFilter : '' ?><?= $typeFilter ? '&type_filter=' . $typeFilter : '' ?><?= $dateFrom ? '&date_from=' . $dateFrom : '' ?><?= $dateTo ? '&date_to=' . $dateTo : '' ?><?= $fiscalYearFilter ? '&fiscal_year_filter=' . $fiscalYearFilter : '' ?>">
-                        <?= $i ?>
-                    </a>
-                </li>
-                <?php endfor; ?>
-                
-                <?php if ($currentPage < $totalPages): ?>
-                <li class="page-item">
-                    <a class="page-link" href="?page=budget-control&page_num=<?= $currentPage + 1 ?><?= $projectFilter ? '&project_filter=' . $projectFilter : '' ?><?= $typeFilter ? '&type_filter=' . $typeFilter : '' ?><?= $dateFrom ? '&date_from=' . $dateFrom : '' ?><?= $dateTo ? '&date_to=' . $dateTo : '' ?><?= $fiscalYearFilter ? '&fiscal_year_filter=' . $fiscalYearFilter : '' ?>">
-                        ถัดไป
-                    </a>
-                </li>
-                <?php endif; ?>
-            </ul>
-        </nav>
-        <?php endif; ?>
+        <!-- Pagination Controls -->
+         <?php if ($totalTransactions > 0): ?>
+         <div class="card-footer bg-transparent border-top-0 pt-3">
+             <div class="row align-items-center">
+                 <div class="col-md-6">
+                     <div class="d-flex align-items-center">
+                         <label class="form-label me-2 mb-0">แสดงต่อหน้า:</label>
+                         <select class="form-select form-select-sm" style="width: auto;" onchange="changePerPage(this.value)">
+                             <?php foreach ($validPerPageOptions as $option): ?>
+                             <option value="<?= $option ?>" <?= $perPage === $option ? 'selected' : '' ?>>
+                                 <?= $option ?> รายการ
+                             </option>
+                             <?php endforeach; ?>
+                         </select>
+                     </div>
+                 </div>
+                 <div class="col-md-6">
+                     <?php if ($totalPages > 1): ?>
+                     <nav aria-label="Transaction pagination">
+                         <ul class="pagination pagination-sm justify-content-end mb-0">
+                             <!-- First Page -->
+                             <?php if ($currentPage > 1): ?>
+                             <li class="page-item">
+                                 <a class="page-link" href="<?= buildPaginationUrl(1) ?>">
+                                     <i class="bi bi-chevron-double-left"></i>
+                                 </a>
+                             </li>
+                             <?php endif; ?>
+                             
+                             <!-- Previous Page -->
+                             <?php if ($currentPage > 1): ?>
+                             <li class="page-item">
+                                 <a class="page-link" href="<?= buildPaginationUrl($currentPage - 1) ?>">
+                                     <i class="bi bi-chevron-left"></i>
+                                 </a>
+                             </li>
+                             <?php endif; ?>
+                             
+                             <!-- Page Numbers -->
+                             <?php
+                             $startPage = max(1, $currentPage - 2);
+                             $endPage = min($totalPages, $currentPage + 2);
+                             
+                             // Adjust range if we're near the beginning or end
+                             if ($endPage - $startPage < 4) {
+                                 if ($startPage === 1) {
+                                     $endPage = min($totalPages, $startPage + 4);
+                                 } else {
+                                     $startPage = max(1, $endPage - 4);
+                                 }
+                             }
+                             
+                             for ($i = $startPage; $i <= $endPage; $i++): ?>
+                             <li class="page-item <?= $i === $currentPage ? 'active' : '' ?>">
+                                 <a class="page-link" href="<?= buildPaginationUrl($i) ?>"><?= $i ?></a>
+                             </li>
+                             <?php endfor; ?>
+                             
+                             <!-- Next Page -->
+                             <?php if ($currentPage < $totalPages): ?>
+                             <li class="page-item">
+                                 <a class="page-link" href="<?= buildPaginationUrl($currentPage + 1) ?>">
+                                     <i class="bi bi-chevron-right"></i>
+                                 </a>
+                             </li>
+                             <?php endif; ?>
+                             
+                             <!-- Last Page -->
+                             <?php if ($currentPage < $totalPages): ?>
+                             <li class="page-item">
+                                 <a class="page-link" href="<?= buildPaginationUrl($totalPages) ?>">
+                                     <i class="bi bi-chevron-double-right"></i>
+                                 </a>
+                             </li>
+                             <?php endif; ?>
+                         </ul>
+                     </nav>
+                     <?php endif; ?>
+                 </div>
+             </div>
+         </div>
+         <?php endif; ?>
         <?php endif; ?>
     </div>
 </div>
