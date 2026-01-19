@@ -51,17 +51,18 @@ try {
     $startDate = $_GET['start_date'] ?? $_GET['date_from'] ?? null;
     $endDate = $_GET['end_date'] ?? $_GET['date_to'] ?? null;
     $transactionType = $_GET['transaction_type'] ?? null;
+    $fiscalYearId = $_GET['fiscal_year_filter'] ?? null;
     
     // Create new Spreadsheet object
     $spreadsheet = new Spreadsheet();
     $sheet = $spreadsheet->getActiveSheet();
     
     if ($type === 'transactions') {
-        exportTransactions($sheet, $transactionService, $projectService, $projectId, $categoryId, $startDate, $endDate, $transactionType);
+        exportTransactions($sheet, $transactionService, $projectService, $projectId, $categoryId, $startDate, $endDate, $transactionType, $fiscalYearId);
     } elseif ($type === 'projects') {
-        exportProjects($sheet, $projectService);
+        exportProjects($sheet, $projectService, $fiscalYearId);
     } elseif ($type === 'summary') {
-        exportSummary($sheet, $transactionService, $projectService, $projectId, $startDate, $endDate);
+        exportSummary($sheet, $transactionService, $projectService, $projectId, $startDate, $endDate, $fiscalYearId);
     }
     
     // Set output format and headers
@@ -88,7 +89,7 @@ try {
     exit;
 }
 
-function exportTransactions($sheet, $transactionService, $projectService, $projectId, $categoryId, $startDate, $endDate, $transactionType) {
+function exportTransactions($sheet, $transactionService, $projectService, $projectId, $categoryId, $startDate, $endDate, $transactionType, $fiscalYearId) {
     // Set title
     $sheet->setTitle('รายการธุรกรรม');
     
@@ -105,9 +106,18 @@ function exportTransactions($sheet, $transactionService, $projectService, $proje
     ];
     $sheet->getStyle('A1:G1')->applyFromArray($headerStyle);
     
+    // Build filters for service
+    $filters = [];
+    if ($transactionType) $filters['type'] = $transactionType;
+    if ($startDate) $filters['date_from'] = $startDate;
+    if ($endDate) $filters['date_to'] = $endDate;
+    if ($fiscalYearId) $filters['fiscal_year_id'] = $fiscalYearId;
+
     // Get transactions data
-    $transactions = $transactionService->getAllTransactions($projectId, null, null, 0);
-    $projects = $projectService->getAllProjects();
+    $transactions = $transactionService->getAllTransactions($projectId, $categoryId, null, 0, $filters);
+    
+    // Get projects for name lookup (filtered by fiscal year if provided)
+    $projects = $projectService->getAllProjects(null, null, $fiscalYearId);
     $projectNames = [];
     foreach ($projects as $project) {
         $projectNames[$project['id']] = $project['name'];
@@ -119,7 +129,7 @@ function exportTransactions($sheet, $transactionService, $projectService, $proje
     $totalExpense = 0;
     
     foreach ($transactions as $transaction) {
-        $projectName = $projectNames[$transaction['project_id']] ?? 'ไม่ระบุ';
+        $projectName = $projectNames[$transaction['project_id']] ?? $transaction['project_name'] ?? 'ไม่ระบุ';
         $amount = number_format($transaction['amount'], 2);
         $type = $transaction['type'] === 'income' ? 'รายรับ' : 'รายจ่าย';
         
@@ -136,7 +146,7 @@ function exportTransactions($sheet, $transactionService, $projectService, $proje
             $transaction['description'],
             $type,
             $amount,
-            $transaction['notes'] ?? ''
+            $transaction['notes'] ?? '' // transactions table doesn't have notes column in schema provided, but kept for compatibility if added later
         ];
         
         $sheet->fromArray($rowData, null, 'A' . $row);
@@ -188,7 +198,7 @@ function exportTransactions($sheet, $transactionService, $projectService, $proje
     $sheet->getStyle($dataRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 }
 
-function exportProjects($sheet, $projectService) {
+function exportProjects($sheet, $projectService, $fiscalYearId) {
     $sheet->setTitle('โครงการ');
     
     // Set headers
@@ -204,8 +214,8 @@ function exportProjects($sheet, $projectService) {
     ];
     $sheet->getStyle('A1:F1')->applyFromArray($headerStyle);
     
-    // Get projects data
-    $projects = $projectService->getAllProjects();
+    // Get projects data filtered by fiscal year
+    $projects = $projectService->getAllProjects(null, null, $fiscalYearId);
     
     $row = 2;
     foreach ($projects as $project) {
@@ -234,7 +244,7 @@ function exportProjects($sheet, $projectService) {
     $sheet->getStyle($dataRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 }
 
-function exportSummary($sheet, $transactionService, $projectService, $projectId, $startDate, $endDate) {
+function exportSummary($sheet, $transactionService, $projectService, $projectId, $startDate, $endDate, $fiscalYearId) {
     $sheet->setTitle('สรุปรายงาน');
     
     // Title
@@ -249,9 +259,17 @@ function exportSummary($sheet, $transactionService, $projectService, $projectId,
         $row += 2;
     }
     
+    // Build filters for service
+    $filters = [];
+    if ($startDate) $filters['date_from'] = $startDate;
+    if ($endDate) $filters['date_to'] = $endDate;
+    if ($fiscalYearId) $filters['fiscal_year_id'] = $fiscalYearId;
+
     // Get summary data
-    $transactions = $transactionService->getAllTransactions($projectId, null, null, 0);
-    $projects = $projectService->getAllProjects();
+    $transactions = $transactionService->getAllTransactions($projectId, null, null, 0, $filters);
+    
+    // Get projects for name lookup (filtered by fiscal year)
+    $projects = $projectService->getAllProjects(null, null, $fiscalYearId);
     
     // Calculate totals by project
     $projectSummary = [];
